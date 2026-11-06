@@ -7,6 +7,7 @@ skills/navegador-cdp/procesos/*
 __pycache__/
 *.pyc
 node_modules/
+.venv/
 
 # Credenciales, entornos y perfiles de navegador
 .env
@@ -15,9 +16,13 @@ client_secret*.json
 credentials.json
 token.json
 
+# Recuperación automática (RAG) generada al activarla en un proyecto: índice, entorno y servidor
+.rag/
+evaluacion.json
+
 # Sistema
 .DS_Store
 Thumbs.db
 
-# Configuraci�n personal del orquestador (qu� CLI lidera)
+# Configuración personal del orquestador (qué CLI lidera)
 skills/workflow-orquestar/orquestador.json
