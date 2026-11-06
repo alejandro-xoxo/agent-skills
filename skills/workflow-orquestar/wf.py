@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: LicenseRef-Proprietary — Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 # Copyright (c) 2026 alejandro-xoxo
 """wf: orquestador de agentes de CLI (OpenCode, agy y Codex).
 

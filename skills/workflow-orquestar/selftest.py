@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: MIT
+# SPDX-License-Identifier: LicenseRef-Proprietary — Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 # Copyright (c) 2026 alejandro-xoxo
 """Pruebas de wf.py con un trabajador falso (no gasta cuota ni llama a ningún modelo). Uso: python selftest.py"""
 import asyncio

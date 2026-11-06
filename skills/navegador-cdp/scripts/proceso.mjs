@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Proprietary — Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 // Copyright (c) 2026 alejandro-xoxo
 // Memoria de procesos repetitivos: crear un borrador, probarlo hasta que salga limpio, guardarlo, listarlo y reutilizarlo.
 // Uso: node proceso.mjs <comando> ...   (sin argumentos muestra la ayuda)

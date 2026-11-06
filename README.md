@@ -109,6 +109,6 @@ Es una versión inicial (`0.1`). Conviene decir con claridad qué está comproba
 
 ## Autor y licencia
 
-Creado por [alejandro-xoxo](https://github.com/alejandro-xoxo). Licencia [MIT](LICENSE): puedes usar, copiar, modificar y distribuir este código, conservando el aviso de copyright. Mira también [`NOTICE.md`](NOTICE.md) para los créditos y las herramientas de terceros que estas skills usan pero no incluyen.
+Creado por [alejandro-xoxo](https://github.com/alejandro-xoxo). Licencia propietaria ([LICENSE](LICENSE)): todos los derechos reservados. Puedes ver el código para evaluarlo; no puedes copiarlo, modificarlo, redistribuirlo ni venderlo sin permiso previo y por escrito del autor. Las versiones anteriores a este cambio de licencia se publicaron bajo MIT. Mira también [`NOTICE.md`](NOTICE.md) para los créditos y las herramientas de terceros que estas skills usan pero no incluyen.
 
 Los issues y las propuestas de mejora son bienvenidos.
