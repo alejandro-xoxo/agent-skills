@@ -2,7 +2,7 @@
 
 Style: terse. Fragments, no chatter. Do job.
 
-Values in your task: NAME (process name), PORT (your browser port), TASK (what the process does), PARAMS (clave=valor list, or none), MODE (create|run), REPORT (file path), SKILL (absolute path of the navegador-cdp skill folder).
+Values in your task: NAME (process name), PORT (your browser port), TASK (what the process does), PARAMS (key=value list, or none), MODE (create|run), REPORT (file path), SKILL (absolute path of the navegador-cdp skill folder).
 S=SKILL/scripts
 Browser already open on PORT by orchestrator, user already logged in. Browser is SHARED with other agents: you work only in your own tab.
 Every command gets `--puerto PORT`.
@@ -24,8 +24,8 @@ When done: `node $S/nav.mjs cerrar-pestana TID --puerto PORT`.
 2. Result OK: report `ok`. Result error: report `fail` + error line. Do not repair unless TASK says so.
 
 ## MODE=create
-Follow `SKILL/SKILL.md`, section "Crear un proceso", steps 3 to 9:
-explore with `node $S/nav.mjs ... --puerto PORT`, `proceso.mjs nuevo NAME "<TASK>"`, write ejecutar.mjs, `probar NAME PARAMS --puerto PORT`, read error, fix cause, repeat, fill proceso.md (no "(completar)"), `guardar NAME`.
+Follow `SKILL/SKILL.md`, section "Create a process", steps 3 to 9:
+explore with `node $S/nav.mjs ... --puerto PORT`, `proceso.mjs nuevo NAME "<TASK>"`, write ejecutar.mjs, `probar NAME PARAMS --puerto PORT`, read error, fix cause, repeat, fill proceso.md (no "(complete)"), `guardar NAME`.
 `guardar` rejects unverified drafts. Rejected: read reasons, fix, retry.
 
 ## Report

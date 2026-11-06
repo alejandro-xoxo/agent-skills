@@ -1,28 +1,30 @@
-# Memoria y estado locales de las skills: nunca se publican
+# Local memory and state of the skills: never published
 skills/navegador-cdp/borradores/
 skills/navegador-cdp/procesos/*
 !skills/navegador-cdp/procesos/LEEME.md
 
-# Python y Node
+# Python and Node
 __pycache__/
 *.pyc
 node_modules/
 .venv/
 
-# Credenciales, entornos y perfiles de navegador
+# Credentials, environments and browser profiles
 .env
 *.env
 client_secret*.json
 credentials.json
 token.json
 
-# Recuperación automática (RAG) generada al activarla en un proyecto: índice, entorno y servidor
+# Automatic retrieval (RAG) generated when it is turned on in a project: index, environment and server
 .rag/
+evaluation.json
 evaluacion.json
 
-# Sistema
+# System
 .DS_Store
 Thumbs.db
 
-# Configuración personal del orquestador (qué CLI lidera)
+# Personal orchestrator configuration (which CLI leads)
+skills/workflow-orquestar/orchestrator.json
 skills/workflow-orquestar/orquestador.json

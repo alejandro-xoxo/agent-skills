@@ -1,168 +1,172 @@
-# Plantilla de memoria para proyectos con agentes
+# Memory template for projects worked on with agents
 
-Una estructura igual para todos tus proyectos, para que el agente retome el contexto sin releer todo. Aplica prácticas habituales (un `AGENTS.md` corto que se carga siempre, un vault de Obsidian con enlaces, skills con carga progresiva) y se apoya en la documentación de Claude Code sobre memoria (<https://code.claude.com/docs/en/memory>).
+(`plantilla` is Spanish for "template".) The same structure for all your projects, so the agent picks the context back up without rereading everything. It applies common practices (a short `AGENTS.md` that is always loaded, an Obsidian vault with links, skills with progressive loading) and relies on Claude Code's documentation about memory (<https://code.claude.com/docs/en/memory>).
 
-**Idea central:** cada sesión empieza sin recuerdos. La memoria consiste en decidir qué se carga siempre (poco), qué se carga si hace falta y qué solo se consulta.
+**Core idea:** every session starts with no memories. Memory is about deciding what is always loaded (little), what is loaded if needed and what is only consulted.
 
-## Qué incluye
+## What it includes
 
-Esta carpeta (plantilla/) va dentro de la skill iniciar-memoria, junto a su SKILL.md.
+This folder (`plantilla/`) goes inside the `iniciar-memoria` skill, next to its `SKILL.md`.
 
 ```
 plantilla/
 ├─ README.md
-├─ nuevo-proyecto.ps1            crea o completa la estructura en un proyecto
-├─ extras/mcp.memory.example.json  nivel 2, opcional (grafo de memoria por MCP)
-├─ extras/graphify/              nivel 3, opcional: guía y .graphifyignore del grafo de código (no instala nada)
-├─ extras/rag/                   nivel 4, opcional: recuperación automática del vault (RAG local); al crear el proyecto no instala nada
-└─ base/                         lo que se copia al proyecto
-   ├─ AGENTS.md                  reglas y mapa; se carga siempre (≤100 líneas)
-   ├─ docs/ESTADO.md             dónde quedó el trabajo (se reescribe)
-   ├─ docs/DECISIONS.md          registro corto de decisiones (se anexa)
+├─ new-project.ps1               creates or completes the structure in a project
+├─ extras/mcp.memory.example.json  level 2, optional (memory graph through MCP)
+├─ extras/graphify/              level 3, optional: guide and .graphifyignore for the code graph (installs nothing)
+├─ extras/rag/                   level 4, optional: automatic vault retrieval (local RAG); creating the project installs nothing
+└─ base/                         what gets copied into the project
+   ├─ AGENTS.md                  rules and map; always loaded (≤100 lines)
+   ├─ docs/STATE.md              where the work stands (rewritten)
+   ├─ docs/DECISIONS.md          short decision log (appended)
    ├─ .claude/skills/
-   │   ├─ memoria/               cómo consultar y escribir la memoria
-   │   ├─ cerrar-tarea/          rutina de cierre
-   │   └─ auditar-memoria/       limpieza periódica
+   │   ├─ memory/                how to read and write the memory
+   │   ├─ close-task/            closing routine
+   │   └─ audit-memory/          periodic cleanup
    ├─ .gitignore
-   └─ conocimiento/              vault de Obsidian (memoria de largo plazo)
-      ├─ 00 Inicio · 00 Inbox · 01 Contexto · 02 Dominio y proceso
-      ├─ 03 Lecciones · 04 Decisiones · 05 Fuentes
-      └─ Plantillas (ADR, Lección)
+   └─ knowledge/                 Obsidian vault (long-term memory)
+      ├─ 00 Home · 00 Inbox · 01 Context · 02 Domain and process
+      ├─ 03 Lessons · 04 Decisions · 05 Sources
+      └─ Templates (ADR, Lesson)
 ```
 
-## Las capas
+## The layers
 
-| Capa | Dónde | Se carga |
+| Layer | Where | Loaded |
 |---|---|---|
-| Reglas y mapa | `AGENTS.md` | Siempre |
-| Estado vivo | `docs/ESTADO.md` | Al empezar (lo pide `AGENTS.md`) |
-| Procedimientos | `.claude/skills/*` | Nombre y descripción siempre; el cuerpo, bajo demanda |
-| Largo plazo | `conocimiento/` | Solo lo que la tarea necesite, entrando por `00 Inicio` |
-| Material crudo | `conocimiento/05 Fuentes/` | Nunca completo; con grep |
-| Consulta por grafo (opcional) | MCP `memory` | Cuando se pregunta |
-| Grafo de código (opcional) | Graphify, preparado en `docs/GRAFO.md` | Cuando el proyecto tenga bastante código |
-| Recuperación automática (opcional) | RAG local en `.rag/` | En cada mensaje, si trata del vault |
+| Rules and map | `AGENTS.md` | Always |
+| Live state | `docs/STATE.md` | At the start (`AGENTS.md` asks for it) |
+| Procedures | `.claude/skills/*` | Name and description always; the body, on demand |
+| Long term | `knowledge/` | Only what the task needs, entering through `00 Home` |
+| Raw material | `knowledge/05 Sources/` | Never whole; with grep |
+| Graph lookup (optional) | MCP `memory` | When asked |
+| Code graph (optional) | Graphify, prepared in `docs/GRAPH.md` | When the project has a fair amount of code |
+| Automatic retrieval (optional) | Local RAG in `.rag/` | On every message, if it is about the vault |
 
-Equivalencia con una organización habitual de segundo cerebro en cuatro carpetas: `00-inbox` → `00 Inbox`; `01-proyectos` → el vault ya es de un proyecto; `02-buenas-practicas` → `03 Lecciones` (y un vault global tuyo, ver más abajo); `03-decisiones` → `04 Decisiones`.
+Equivalence with a common four-folder second-brain layout: `00-inbox` → `00 Inbox`; `01-projects` → the vault already belongs to one project; `02-best-practices` → `03 Lessons` (and a global vault of your own, see below); `03-decisions` → `04 Decisions`.
 
-## Cómo usarla
+## How to use it
 
-Proyecto nuevo o existente (no sobrescribe lo que ya exista):
+New or existing project (it does not overwrite what already exists):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "<carpeta de la plantilla>\nuevo-proyecto.ps1" `
-  -Destino "<carpeta del proyecto>" `
-  -Nombre "Mi Proyecto" -Descripcion "Qué es, en una línea" -Stack "Python y FastAPI" -ConGit
+powershell -ExecutionPolicy Bypass -File "<template folder>\new-project.ps1" `
+  -Destination "<project folder>" `
+  -Name "My Project" -Description "What it is, in one line" -Stack "Python and FastAPI" -WithGit
 ```
 
-Opciones: `-ConGit` hace `git init` sin commit; `-ConMcpMemoria` crea un `.mcp.json` con el servidor de memoria; `-ConGraphify` deja preparado el grafo de código (ver "Nivel 3 opcional"); `-SoloGraphify` hace solo eso en un proyecto que ya existe, sin tocar nada más; `-ConRag` y `-SoloRag` dejan preparada la recuperación automática (ver "Nivel 4 opcional"); `-Forzar` sobrescribe. Para usar un vault de Obsidian que ya tienes, ver la sección siguiente.
+Options: `-WithGit` runs `git init` without a commit; `-WithMemoryMcp` creates a `.mcp.json` with the memory server; `-WithGraphify` leaves the code graph prepared (see "Optional level 3"); `-GraphifyOnly` does only that on a project that already exists, touching nothing else; `-WithRag` and `-RagOnly` leave automatic retrieval prepared (see "Optional level 4"); `-Force` overwrites. To use an Obsidian vault you already have, see the next section.
 
-## Conectar un vault de Obsidian propio
-Por defecto el vault es `conocimiento/` dentro del proyecto. Para usar otro, la **única fuente de verdad** es el bloque `## Memoria` de `AGENTS.md`: ahí van la ruta del vault y las carpetas (índice, inbox, lecciones, decisiones, fuentes). Las tres skills leen ese bloque, así que cambiarlo basta.
+The parameters were Spanish in earlier versions (`-Destino`, `-Nombre`, `-Descripcion`, `-ConGit`, `-ConMcpMemoria`, `-ConGraphify`, `-SoloGraphify`, `-ConRag`, `-SoloRag`, `-Forzar`, `-Carpeta`, `-CrearVault`, `-SoloVault`); the old names still work as aliases.
 
-| Situación | Cómo |
+## Connect an Obsidian vault of your own
+By default the vault is `knowledge/` inside the project. To use another one, the **single source of truth** is the `## Memory` block of `AGENTS.md`: it holds the vault path and the folders (index, inbox, lessons, decisions, sources). The three skills read that block, so changing it is enough.
+
+| Situation | How |
 |---|---|
-| Vault nuevo o vacío | `-Vault "D:\Obsidian\MiVault"` (añade `-CrearVault` si la carpeta aún no existe) |
-| Vault compartido entre proyectos | `-Vault "D:\Obsidian\Cerebro" -Carpeta "Mi Proyecto"`: la estructura va en una subcarpeta y no se anida otro `.obsidian` |
-| Solo crear la estructura en el vault, sin tocar el proyecto | añade `-SoloVault` |
-| Vault que ya tiene notas con otra estructura | No se crean carpetas: se edita a mano el bloque `## Memoria` con las carpetas reales |
+| New or empty vault | `-Vault "D:\Obsidian\MyVault"` (add `-CreateVault` if the folder does not exist yet) |
+| Vault shared among projects | `-Vault "D:\Obsidian\Brain" -Folder "My Project"`: the structure goes in a subfolder and no other `.obsidian` is nested |
+| Only create the structure in the vault, without touching the project | add `-VaultOnly` |
+| Vault that already has notes with another structure | No folders are created: edit the `## Memory` block by hand with the real folders |
 
-El script nunca sobrescribe notas existentes. En un vault compartido, las notas de la plantilla (Inbox, Glosario, Decisiones…) se llaman igual en cada proyecto y Obsidian puede resolver un enlace a la nota de otro; usa nombres propios.
+The script never overwrites existing notes. In a shared vault, the template notes (Inbox, Glossary, Decisions...) are named the same in every project and Obsidian may resolve a link to another project's note; use names of your own.
 
-### Skill global `iniciar-memoria`
-Hace todo lo anterior conversando. Es el `SKILL.md` de la carpeta superior (`iniciar-memoria/`). Para instalarla, copia esa carpeta completa, con `plantilla/` dentro, a la carpeta de skills de tu agente (por ejemplo `~/.claude/skills/`) y reinicia la sesión. Al empezar un proyecto detecta si falta la memoria y aplica la plantilla; si ya existe, carga el estado y el índice; y si le dices "conéctalo a mi vault" y la ruta, valida el vault, consigue acceso a esa carpeta, elige el modo y actualiza el bloque `## Memoria`. Encuentra la plantilla por su ruta relativa (`plantilla/` junto al `SKILL.md`): si separas las dos carpetas, la skill te preguntará dónde está.
+### The `iniciar-memoria` skill
+It does all of the above in conversation. It is the `SKILL.md` of the parent folder (`iniciar-memoria/`). To install it, copy that whole folder, with `plantilla/` inside, to your agent's skills folder (for example `~/.claude/skills/`) and restart the session. When a project starts it detects whether the memory is missing and applies the template; if it already exists, it loads the state and the index; and if you say "connect it to my vault" and give the path, it validates the vault, gets access to that folder, picks the mode and updates the `## Memory` block. It finds the template by its relative path (`plantilla/` next to the `SKILL.md`): if you separate the two folders, the skill will ask you where it is.
 
-La **carga automática en cada sesión** no depende de la skill sino de `AGENTS.md` ("Empieza aquí"). Una skill se activa cuando el agente cree que encaja con su descripción, no en cada arranque.
+**Automatic loading in every session** does not depend on the skill but on `AGENTS.md` ("Start here"). A skill is activated when the agent thinks it fits its description, not on every startup.
 
-## Por qué no usa RAG ni grafo por defecto
-Es una decisión de tamaño y de confianza, no una carencia.
+## Why it does not use RAG or a graph by default
+It is a decision about size and trust, not a shortcoming.
 
-- **RAG (búsqueda por vectores).** Parte las notas en trozos y trae los parecidos a la pregunta. Con decenas de notas es peor que lo que ya hay: los trozos pierden el contexto (el porqué de una decisión queda separado de su fecha y su fuente), necesita un índice que se desactualiza cada vez que cambia una nota, y no se puede auditar por qué trajo un trozo y no otro. Aquí el agente entra por un índice, sigue `[[enlaces]]` y busca con grep: es predecible y verificable.
-- **Grafo.** El propio vault ya es un grafo: cada `[[wikilink]]` es una relación y Obsidian lo dibuja. Un grafo aparte (entidades, relaciones, observaciones) duplica lo que dicen las notas y se desordena sin un esquema estricto; dos fuentes de verdad acaban contradiciéndose.
-- **Criterio de partida:** empezar por lo más simple y no montar infraestructura pesada el primer día; el RAG clásico rara vez es la opción más sencilla o eficiente para un proyecto pequeño.
+- **RAG (vector search).** It splits the notes into chunks and brings back the ones similar to the question. With dozens of notes it is worse than what is already there: chunks lose their context (the why of a decision gets separated from its date and its source), it needs an index that goes stale every time a note changes, and you cannot audit why it brought one chunk and not another. Here the agent enters through an index, follows `[[links]]` and searches with grep: it is predictable and verifiable.
+- **Graph.** The vault is already a graph: every `[[wikilink]]` is a relationship and Obsidian draws it. A separate graph (entities, relationships, observations) duplicates what the notes say and gets messy without a strict schema; two sources of truth end up contradicting each other.
+- **Starting criterion:** begin with the simplest thing and do not set up heavy infrastructure on day one; classic RAG is rarely the simplest or most efficient option for a small project.
 
-**Sí hay un grafo, pero opcional:** `-ConMcpMemoria` añade el servidor de memoria como acelerador de consulta. Las notas mandan.
+**There is a graph, but optional:** `-WithMemoryMcp` adds the memory server as a lookup accelerator. The notes rule.
 
-**Cuándo sí valdría la pena añadirlos:**
-- Un grafo de código (por ejemplo `codebase-memory-mcp`, que no he verificado) cuando el repositorio sea grande y el agente gaste mucho leyendo archivos para saber quién llama a qué.
-- RAG o búsqueda semántica sobre las **fuentes crudas** cuando sean muchas o enormes (cientos de documentos, conversaciones de miles de líneas), manteniendo las notas curadas como capa principal. Está disponible como opción (`-ConRag`, ver "Nivel 4 opcional").
-- Un grafo temporal (Zep o Graphiti) en agentes autónomos de producción, por ejemplo en n8n, donde los datos cambian solos y hay que invalidar los viejos.
-- Señal práctica para dar el paso: cuando el grep devuelve demasiados resultados irrelevantes o el índice ya no cabe en una pantalla.
+**When it would be worth adding them:**
+- A code graph (for example `codebase-memory-mcp`, which I have not verified) when the repository is large and the agent spends a lot reading files to find out who calls what.
+- RAG or semantic search over the **raw sources** when they are many or huge (hundreds of documents, conversations of thousands of lines), keeping the curated notes as the main layer. It is available as an option (`-WithRag`, see "Optional level 4").
+- A temporal graph (Zep or Graphiti) in autonomous production agents, for example in n8n, where the data changes by itself and old facts have to be invalidated.
+- Practical signal to take the step: when grep returns too many irrelevant results or the index no longer fits on one screen.
 
-## Primeros 10 minutos en un proyecto
-1. Completa en `AGENTS.md` los comandos y de 3 a 7 reglas de oro propias.
-2. Rellena `conocimiento/01 Contexto/Proyecto y objetivo.md`.
-3. Abre la carpeta `conocimiento` como bóveda en Obsidian.
-4. Anota en `05 Fuentes/Fuentes.md` el material crudo que ya exista.
-5. Trabaja; al terminar una tarea importante pide la skill `cerrar-tarea`.
+## First 10 minutes in a project
+1. Fill in the commands and 3 to 7 golden rules of your own in `AGENTS.md`.
+2. Fill in `knowledge/01 Context/Project and goal.md`.
+3. Open the `knowledge` folder as a vault in Obsidian.
+4. Record in `05 Sources/Sources.md` the raw material that already exists.
+5. Work; when you finish an important task, ask for the `close-task` skill.
 
-## AGENTS.md y Claude Code
-Según la documentación de Claude Code, lee `AGENTS.md` directamente (versión 2.1.277 o posterior) **solo si no hay ningún `CLAUDE.md` ni `CLAUDE.local.md` en la carpeta del proyecto ni en las superiores**. Si existe alguno de los dos, lee esos y deja `AGENTS.md` de lado. Por eso la plantilla **no incluye `CLAUDE.md`**.
+## AGENTS.md and Claude Code
+According to Claude Code's documentation, it reads `AGENTS.md` directly (version 2.1.277 or later) **only if there is no `CLAUDE.md` or `CLAUDE.local.md` in the project folder or in the ones above it**. If either exists, it reads those and leaves `AGENTS.md` aside. That is why the template **does not include `CLAUDE.md`**.
 
-- Tu `~/.claude/CLAUDE.md` personal y las reglas en `.claude/rules/` no cuentan: siguen cargándose junto a `AGENTS.md`.
-- Si en algún entorno no lo lee (versión vieja, o `/plugin` desactivó el soporte), crea un `CLAUDE.md` con una sola línea: `@AGENTS.md`.
-- La documentación recomienda menos de 200 líneas; la plantilla se queda en 100 para dejar margen.
+- Your personal `~/.claude/CLAUDE.md` and the rules in `.claude/rules/` do not count: they keep loading alongside `AGENTS.md`.
+- If in some environment it does not read it (old version, or `/plugin` turned the support off), create a `CLAUDE.md` with a single line: `@AGENTS.md`.
+- The documentation recommends fewer than 200 lines; the template stays at 100 to leave margin.
 
 ## Skills
-`.claude/skills/<nombre>/SKILL.md` es el formato de Claude Code: del encabezado `name` y `description` se ve siempre, y el cuerpo se carga cuando la tarea coincide. Otros agentes no tienen por qué cargarlas solos; por eso `AGENTS.md` las nombra y son Markdown normal que cualquier agente puede leer.
+`.claude/skills/<name>/SKILL.md` is Claude Code's format: the `name` and `description` of the header are always visible, and the body is loaded when the task matches. Other agents do not necessarily load them on their own; that is why `AGENTS.md` names them and they are plain Markdown that any agent can read.
 
-## Nivel 2 opcional: grafo de memoria
-`-ConMcpMemoria` genera un `.mcp.json` con `@modelcontextprotocol/server-memory` (entidades, relaciones y observaciones en un `.jsonl` local en `.memory/`). Claude Code pedirá aprobación la primera vez. Úsalo como acelerador de consulta, no como fuente de verdad: las notas de `conocimiento/` mandan.
+## Optional level 2: memory graph
+`-WithMemoryMcp` generates a `.mcp.json` with `@modelcontextprotocol/server-memory` (entities, relationships and observations in a local `.jsonl` in `.memory/`). Claude Code will ask for approval the first time. Use it as a lookup accelerator, not as a source of truth: the notes in `knowledge/` rule.
 
-Otra opción que se menciona en la comunidad es `codebase-memory-mcp`, para mapear código. No lo incluí: no lo he verificado y solo aporta en proyectos con mucho código.
+Another option mentioned in the community is `codebase-memory-mcp`, for mapping code. I did not include it: I have not verified it and it only adds value in projects with a lot of code.
 
-## Nivel 3 opcional: grafo de código (Graphify)
-La idea es **dejar el terreno listo** para cuando el proyecto crezca, sin pagar su coste antes de tiempo. `-ConGraphify` (o `-SoloGraphify` en un proyecto que ya existe) deja:
+## Optional level 3: code graph (Graphify)
+The idea is to **leave the ground ready** for when the project grows, without paying its cost ahead of time. `-WithGraphify` (or `-GraphifyOnly` on a project that already exists) leaves:
 
-- `.graphifyignore`: qué no debe leer Graphify. Excluye por defecto las fuentes con datos personales, el vault, la memoria del agente, las dependencias y las credenciales.
-- `docs/GRAFO.md`: qué es, cuándo activarlo, cómo hacerlo paso a paso, qué no hacer y cómo quitarlo.
-- Una línea en el mapa de `AGENTS.md` que apunta a esa guía, y `graphify-out/` en el `.gitignore`.
+- `.graphifyignore`: what Graphify must not read. By default it excludes sources with personal data, the vault, the agent's memory, dependencies and credentials.
+- `docs/GRAPH.md`: what it is, when to turn it on, how to do it step by step, what not to do and how to remove it.
+- A line in the `AGENTS.md` map that points to that guide, and `graphify-out/` in `.gitignore`.
 
-**No instala ni ejecuta nada.** Activarlo es una decisión posterior, cuando el repositorio tenga bastante código y el agente gaste mucho leyendo archivos.
+**It installs and runs nothing.** Turning it on is a later decision, when the repository has a fair amount of code and the agent spends a lot reading files.
 
-Cuidados que recoge `docs/GRAFO.md`, porque chocan con esta plantilla:
-- `graphify claude install` escribe en `CLAUDE.md`, y con ese archivo Claude Code deja de leer `AGENTS.md` (ver la sección siguiente). No lo uses.
-- Sus ganchos en modo estricto pueden denegar lecturas de archivos, incluidas las del vault.
-- Los documentos, PDFs e imágenes que indexa se envían al modelo del asistente; el código se procesa en local. Por eso el `.graphifyignore` excluye las fuentes crudas.
-- Las cifras de ahorro de tokens son del autor de la herramienta y conviene medirlas en tu proyecto.
+Cautions that `docs/GRAPH.md` records, because they clash with this template:
+- `graphify claude install` writes to `CLAUDE.md`, and with that file present Claude Code stops reading `AGENTS.md` (see the section above). Do not use it.
+- Its strict-mode hooks can deny file reads, including those of the vault.
+- The documents, PDFs and images it indexes are sent to the assistant's model; code is processed locally. That is why `.graphifyignore` excludes the raw sources.
+- The token-savings figures come from the tool's author and are worth measuring in your project.
 
-La herramienta es de terceros ([Graphify-Labs/graphify](https://github.com/Graphify-Labs/graphify), Apache-2.0): aquí no se incluye su código.
+The tool belongs to a third party ([Graphify-Labs/graphify](https://github.com/Graphify-Labs/graphify), Apache-2.0): its code is not included here.
 
-## Nivel 4 opcional: recuperación automática del vault (RAG local)
-Para cuando las fuentes crudas son grandes (por ejemplo, una conversación de miles de líneas) y `grep` no basta: un gancho de Claude Code añade a cada mensaje los trozos más relevantes del vault y de `docs/`, con archivo y líneas, usando una búsqueda por significado mezclada con palabras exactas. Todo corre en el equipo, y las notas curadas pesan más que el material crudo.
+## Optional level 4: automatic vault retrieval (local RAG)
+For when the raw sources are large (for example, a conversation of thousands of lines) and `grep` is not enough: a Claude Code hook adds to every message the most relevant chunks of the vault and of `docs/`, with file and lines, using a search by meaning mixed with exact words. Everything runs on the machine, and curated notes weigh more than raw material.
 
-Se activa en dos pasos, para que crear un proyecto nunca instale ni descargue nada sin que lo decidas:
-1. `-ConRag` (o `-SoloRag` en un proyecto que ya existe) copia `.rag/` (el motor `rag.py`, el script `preparar.ps1`, una guía y un ejemplo de evaluación), añade una línea a `AGENTS.md` e ignora `.rag/` en git.
-2. `.rag\preparar.ps1` hace lo pesado: entorno de Python (3.10 a 3.13), `fastembed`, índice, ganchos en `.claude/settings.local.json` (mezcla con lo que haya, con copia de seguridad) y servidor local. La primera vez descarga unos 0,6 GB de modelo, que se comparte entre proyectos.
+It is turned on in two steps, so that creating a project never installs or downloads anything without you deciding:
+1. `-WithRag` (or `-RagOnly` on a project that already exists) copies `.rag/` (the `rag.py` engine, the `prepare.ps1` script, a guide and an evaluation example), adds a line to `AGENTS.md` and ignores `.rag/` in git.
+2. `.rag\prepare.ps1` does the heavy part: Python environment (3.10 to 3.13), `fastembed`, index, hooks in `.claude/settings.local.json` (merging with what is there, with a backup) and a local server. The first time it downloads about 0.6 GB of model, which is shared among projects.
 
-Lo que hay que saber:
-- Es opcional y tiene costes: unos 700 MB de memoria mientras el servidor está activo, entre 500 y 900 tokens más por cada mensaje relacionado, y `.rag/indice/` guarda el texto completo de las fuentes (no debe compartirse).
-- Solo inyecta si el mensaje trata del vault (umbral de similitud 0,50). Es preferible no dar contexto que darlo equivocado.
-- Mejora qué trozos le llegan al agente, no garantiza que acierte: cada trozo trae archivo y líneas para verificarlo.
-- Se mide con `rag.py evaluar` y preguntas propias (`evaluacion.ejemplo.json`). En el proyecto donde se probó, con 20 preguntas escritas por quien conocía las notas, la mezcla acertó en los 3 primeros el 95% de las veces y las palabras solas el 70%.
-- Windows y Python de la 3.10 a la 3.13 (probado con 3.12). El detalle está en `.rag/LEEME.md`.
+What you need to know:
+- It is optional and has costs: about 700 MB of memory while the server is active, between 500 and 900 more tokens for each related message, and `.rag/index/` stores the full text of the sources (it must not be shared).
+- It only injects if the message is about the vault (similarity threshold 0.50). Giving no context is better than giving the wrong one.
+- It improves which chunks reach the agent, it does not guarantee that it gets things right: each chunk carries file and lines so it can be verified.
+- It is measured with `rag.py evaluate` and questions of your own (`evaluation.example.json`). In the project where it was tried, with 20 questions written by someone who knew the notes, the mix hit in the top 3 95% of the time and the keywords alone 70%.
+- Windows and Python 3.10 to 3.13 (tested with 3.12). The detail is in `.rag/README.md`.
+- `rag.py` also accepts the older Spanish command names (`indexar`, `buscar`, `servidor`, `arrancar`, `parar`, `ganchos`, `evaluar`) and environment variables (`RAG_DESACTIVAR`, `RAG_UMBRAL`, `RAG_MODELO`, `RAG_MODELOS`, `RAG_PESO_CURADO`).
 
-## Tu capa global (no la toca el script)
-- `~/.claude/CLAUDE.md` y `~/.claude/rules/` para preferencias que valen en todos los proyectos.
-- Un vault tuyo de buenas prácticas entre proyectos (un "segundo cerebro"). Cada `AGENTS.md` puede apuntar a él con una línea.
+## Your global layer (the script does not touch it)
+- `~/.claude/CLAUDE.md` and `~/.claude/rules/` for preferences that apply to all projects.
+- A vault of your own with best practices across projects (a "second brain"). Each `AGENTS.md` can point to it with one line.
 
-## Mantenimiento
-- La memoria vieja o contradictoria es peor que ninguna: usa la skill `auditar-memoria` de vez en cuando o cuando `AGENTS.md` pase de 100 líneas.
-- Antes de actuar sobre un dato guardado, compruébalo en la fuente.
-- El auto-memory de Claude Code (notas que escribe solo) convive con esto: lo personal y por repositorio va allí; lo compartido y versionado, aquí.
+## Maintenance
+- Old or contradictory memory is worse than none: use the `audit-memory` skill from time to time or when `AGENTS.md` goes past 100 lines.
+- Before acting on a stored fact, check it against the source.
+- Claude Code's auto-memory (notes it writes by itself) coexists with this: what is personal and per-repository goes there; what is shared and versioned, here.
 
-## Qué se probó y qué no
-**Probado:**
-- El script en carpetas temporales: proyecto normal (19 archivos, marcadores rellenos, `{{date}}` de Obsidian intacto, sin enlaces rotos, sin `CLAUDE.md`), segunda ejecución sin sobrescribir, vault externo vacío, vault compartido con `-Carpeta` (la nota ajena y el `.obsidian` existente quedan intactos, sin `.obsidian` anidado), `-SoloVault` (no crea el proyecto) y los errores esperados (vault inexistente sin `-CrearVault`, `-SoloVault` sin `-Vault`).
-- El servidor de memoria arrancando con la configuración generada, con sus 9 herramientas y escribiendo su archivo.
-- `-ConGraphify` y `-SoloGraphify` (en carpetas temporales): proyecto nuevo con la opción, repetición sin duplicar nada, sin la opción (no aparece nada de Graphify), proyecto existente con un `AGENTS.md` propio en CRLF (se conservan los saltos de línea y se añade una sección), carpeta sin `AGENTS.md`, `.gitignore` ni git (solo crea los dos archivos de guía), y los errores esperados (destino inexistente y combinaciones no permitidas), sin crear `conocimiento/`, `.claude/` ni `CLAUDE.md`.
-- `-ConRag` y `-SoloRag` (en carpetas temporales): proyecto nuevo con la opción (solo crea archivos: sin entorno, sin modelo y sin `CLAUDE.md`), repetición sin duplicar, sin la opción, proyecto existente con `AGENTS.md` propio en CRLF, combinación con `-SoloGraphify`, errores esperados, y el registro de ganchos sobre una configuración existente (conserva permisos, modelo y otros ganchos, hace copia de seguridad, no duplica y no toca un JSON inválido ni de forma inesperada). Además, `preparar.ps1` de principio a fin en un proyecto nuevo: 61 s con el modelo ya en la caché compartida, sin volver a descargarlo.
+## What was tested and what was not
+**Tested** (the template was first written with Spanish names and later translated to English; the first four items were run on the Spanish version, and the installer and engine were then re-run after the translation, see the last item):
+- The script in temporary folders: a normal project (19 files, markers filled in, Obsidian's `{{date}}` intact, no broken links, no `CLAUDE.md`), a second run without overwriting, an empty external vault, a shared vault with `-Folder` (the other note and the existing `.obsidian` stay intact, no nested `.obsidian`), `-VaultOnly` (does not create the project) and the expected errors (nonexistent vault without `-CreateVault`, `-VaultOnly` without `-Vault`).
+- The memory server starting with the generated configuration, with its 9 tools and writing its file.
+- `-WithGraphify` and `-GraphifyOnly` (in temporary folders): a new project with the option, a repeat without duplicating anything, without the option (nothing about Graphify appears), an existing project with an `AGENTS.md` of its own with CRLF line endings (the line endings are kept and a section is added), a folder with no `AGENTS.md`, `.gitignore` or git (it only creates the two guide files), and the expected errors (nonexistent destination and disallowed combinations), without creating `knowledge/`, `.claude/` or `CLAUDE.md`.
+- `-WithRag` and `-RagOnly` (in temporary folders): a new project with the option (it only creates files: no environment, no model and no `CLAUDE.md`), a repeat without duplicating, without the option, an existing project with an `AGENTS.md` of its own with CRLF, combined with `-GraphifyOnly`, expected errors, and the registration of hooks over an existing configuration (it keeps permissions, model and other hooks, makes a backup, does not duplicate and does not touch invalid or unexpected JSON). Also, `prepare.ps1` (then called `preparar.ps1`) from start to finish on a new project: 61 s with the model already in the shared cache, without downloading it again.
+- After the English translation: `new-project.ps1` with `-WithGit -WithGraphify -WithRag` and with the old Spanish parameter names on a shared external vault (19 files, no unfilled markers, no broken links); and the `rag.py` logic (indexing, hybrid/semantic/keyword search, raw-source detection, local server, hook gating and `RAG_DISABLE`, hook registration, evaluation) with a stand-in vector function instead of the real model, 25 checks passed.
 
-**No probado:**
-- La skill `iniciar-memoria` de punta a punta en una conversación real.
-- Cargar un proyecto generado en una sesión nueva de Claude Code (aprobación del `.mcp.json`, disparo de las skills).
-- Abrir en Obsidian el vault generado.
-- Conectar un vault que ya tiene su propia estructura (el modo "Existente" depende del criterio del agente, no del script).
-- El uso con agentes que no sean Claude Code.
-- Graphify en sí: no se instaló ni se ejecutó. `docs/GRAFO.md` se basa en su README (y en un archivo de referencia de su instalación para Claude), así que sus comandos hay que confirmarlos con `graphify --help` al activarlo.
-- La recuperación automática: `preparar.ps1` con una descarga del modelo desde cero (la caché compartida ya existía) y con Pythons distintos de 3.12; que el servidor siga vivo entre mensajes reales a largo plazo; macOS y Linux.
+**Not tested:**
+- The `iniciar-memoria` skill end to end in a real conversation.
+- Loading a generated project in a new Claude Code session (`.mcp.json` approval, skills triggering).
+- Opening the generated vault in Obsidian.
+- Connecting a vault that already has its own structure (the "Existing" mode depends on the agent's judgment, not on the script).
+- Use with agents other than Claude Code.
+- Graphify itself: it was neither installed nor run. `docs/GRAPH.md` is based on its README (and on a reference file from its installation for Claude), so its commands must be confirmed with `graphify --help` when turning it on.
+- Automatic retrieval: `prepare.ps1` with the real model after the English rename, `prepare.ps1` with a model download from scratch (the shared cache already existed) and with Pythons other than 3.12; whether the server stays alive between real messages over the long term; macOS and Linux.

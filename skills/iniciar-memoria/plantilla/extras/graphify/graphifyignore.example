@@ -1,24 +1,24 @@
-# Qué NO debe leer Graphify en este proyecto. Estilo .gitignore (según el README de Graphify, que además
-# respeta el .gitignore del proyecto). Revísalo antes de generar el primer grafo.
-# Por qué importa: en la pasada de documentos, Graphify manda el contenido al modelo del asistente.
-# Lo que no se ignore aquí puede acabar enviándose.
+# What Graphify must NOT read in this project. .gitignore style (according to Graphify's README, which also
+# respects the project's .gitignore). Review it before generating the first graph.
+# Why it matters: in the documents pass, Graphify sends the content to the assistant's model.
+# Whatever is not ignored here may end up being sent.
 
-# Material crudo o con datos personales (conversaciones, exportaciones, capturas, datos)
-conocimiento/05 Fuentes/
-fuentes/
-datos/
+# Raw material or material with personal data (conversations, exports, screenshots, data)
+knowledge/05 Sources/
+sources/
+data/
 *.csv
 *.xlsx
 
-# Memoria del agente y notas locales (el vault ya es su propio grafo de enlaces)
-# Quita estas líneas solo si quieres mapear las notas.
-conocimiento/
+# The agent's memory and local notes (the vault is already its own graph of links)
+# Remove these lines only if you want to map the notes.
+knowledge/
 .memory/
 AGENTS.md
-docs/ESTADO.md
+docs/STATE.md
 docs/DECISIONS.md
 
-# Dependencias, compilados y salidas
+# Dependencies, build output and generated files
 node_modules/
 .venv/
 venv/
@@ -28,7 +28,7 @@ __pycache__/
 *.min.js
 graphify-out/
 
-# Credenciales
+# Credentials
 .env
 *.env
 client_secret*.json

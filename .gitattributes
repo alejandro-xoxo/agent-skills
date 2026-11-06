@@ -1,2 +1,2 @@
-# Saltos de línea LF en el repositorio, también para quien trabaje en Windows (un shebang con CRLF falla en macOS y Linux)
+# LF line endings in the repository, also for anyone working on Windows (a shebang with CRLF breaks scripts on Linux/macOS).
 * text=auto eol=lf

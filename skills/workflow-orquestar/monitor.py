@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: LicenseRef-Proprietary — Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 # Copyright (c) 2026 alejandro-xoxo
 """
-Monitor visual de terminal para workflow-orquestar.
-Permite ver en vivo qué está haciendo cada subagente (comandos, herramientas,
-archivos modificados, pruebas, logs) en una sola terminal dedicada.
+Visual terminal monitor for workflow-orquestar.
+Lets you watch live what each subagent is doing (commands, tools,
+modified files, tests, logs) in a single dedicated terminal.
 
-Uso:
+Usage:
     python monitor.py
 """
 from __future__ import annotations
@@ -20,18 +20,18 @@ import tempfile
 import time
 from pathlib import Path
 
-# Habilitar soporte ANSI en Windows si aplica
+# Enable ANSI support on Windows if applicable
 if os.name == "nt":
     os.system("")
     import msvcrt
 
-# Paleta ANSI
+# ANSI palette
 RESET = "\033[0m"
 BOLD = "\033[1m"
 DIM = "\033[2m"
 UNDERLINE = "\033[4m"
 
-# Colores de texto
+# Text colors
 BLACK = "\033[30m"
 RED = "\033[31m"
 GREEN = "\033[32m"
@@ -41,7 +41,7 @@ MAGENTA = "\033[35m"
 CYAN = "\033[36m"
 WHITE = "\033[37m"
 
-# Colores de fondo
+# Background colors
 BG_DARK = "\033[48;5;235m"
 BG_BLUE = "\033[44m"
 BG_GRAY = "\033[48;5;238m"
@@ -73,7 +73,7 @@ def find_latest_run(base_dir: Path) -> Path | None:
 
 
 class AgentLogReader:
-    """Lee incrementalmente el log de un agente sin bloquear."""
+    """Reads an agent's log incrementally without blocking."""
     def __init__(self, log_path: Path):
         self.log_path = log_path
         self.offset = 0
@@ -97,7 +97,7 @@ class AgentLogReader:
 
 
 def format_cli_line(line: str, max_w: int) -> str:
-    """Colorea semánticamente lo que hace el CLI como si fuera una terminal nativa."""
+    """Semantically colors what the CLI is doing, as if it were a native terminal."""
     clean = ANSI_CLEAN.sub("", line).rstrip()
     if not clean:
         return ""
@@ -105,17 +105,17 @@ def format_cli_line(line: str, max_w: int) -> str:
     prefix = "  "
     c_line = clean
 
-    # Detección de herramientas y comandos
-    if re.search(r"\b(read_file|reading|leyendo)\b", clean, re.I):
-        prefix = f"{CYAN}📖 LEER{RESET} "
-    elif re.search(r"\b(edit_file|writing|escribiendo|modificando)\b", clean, re.I):
+    # Detection of tools and commands
+    if re.search(r"\b(read_file|reading)\b", clean, re.I):
+        prefix = f"{CYAN}📖 READ{RESET} "
+    elif re.search(r"\b(edit_file|writing|modifying)\b", clean, re.I):
         prefix = f"{YELLOW}✏️  EDIT{RESET} "
-    elif re.search(r"\b(run_command|bash|exec|ejecutando|mvn|pytest|python)\b", clean, re.I):
+    elif re.search(r"\b(run_command|bash|exec|running|mvn|pytest|python)\b", clean, re.I):
         prefix = f"{GREEN}💻 CMD {RESET} "
-    elif re.search(r"\b(fail|error|exception|falló|tiempo agotado)\b", clean, re.I):
+    elif re.search(r"\b(fail|failed|error|exception|timed out)\b", clean, re.I):
         prefix = f"{RED}❌ ERR {RESET} "
         c_line = f"{RED}{clean}{RESET}"
-    elif re.search(r"\b(tests run:|build success|aprobadas|éxito|ok)\b", clean, re.I):
+    elif re.search(r"\b(tests run:|build success|passed|success|ok)\b", clean, re.I):
         prefix = f"{GREEN}✔ TEST{RESET} "
         c_line = f"{GREEN}{clean}{RESET}"
     elif re.search(r"^\[\d{2}:\d{2}:\d{2}\]", clean):
@@ -124,7 +124,7 @@ def format_cli_line(line: str, max_w: int) -> str:
         prefix = f"{DIM}──{RESET} "
         c_line = f"{DIM}{clean}{RESET}"
 
-    # Truncar visualmente para no quebrar líneas
+    # Visually truncate so lines do not wrap
     raw_len = len(clean) + 4
     if raw_len > max_w:
         c_line = clean[: max_w - 7] + "..."
@@ -135,15 +135,15 @@ def format_cli_line(line: str, max_w: int) -> str:
 def run_monitor():
     clear_screen()
     base_dir = get_wf_runs_dir()
-    selected_agent = 1  # 1-N o 0 para vista global
+    selected_agent = 1  # 1-N, or 0 for the global view
     spin_idx = 0
     readers: dict[int, AgentLogReader] = {}
     current_run: Path | None = None
 
-    sys.stdout.write("\033[?25l")  # Ocultar cursor
+    sys.stdout.write("\033[?25l")  # Hide the cursor
     try:
         while True:
-            # Manejo de entrada no bloqueante por teclado
+            # Non-blocking keyboard input
             if os.name == "nt":
                 while msvcrt.kbhit():
                     ch = msvcrt.getch()
@@ -152,7 +152,7 @@ def run_monitor():
                         if k in "123456789":
                             selected_agent = int(k)
                         elif k in ("0", "a"):
-                            selected_agent = 0  # Global / todos
+                            selected_agent = 0  # Global / all
                         elif k == "q":
                             return
                         elif k == "l":
@@ -165,13 +165,13 @@ def run_monitor():
             spin_idx = (spin_idx + 1) % len(SPINNERS)
             spinner = SPINNERS[spin_idx]
 
-            # Buscar última ejecución
+            # Find the latest run
             latest_run = find_latest_run(base_dir)
             if latest_run != current_run:
                 current_run = latest_run
                 readers.clear()
 
-            # Leer metadata si existe
+            # Read the metadata if it exists
             status_file = current_run / "status.json" if current_run else None
             status_data = {}
             if status_file and status_file.exists():
@@ -180,26 +180,26 @@ def run_monitor():
                 except Exception:
                     pass
 
-            run_id = status_data.get("run_id", current_run.name if current_run else "Ninguno")
-            phase_name = status_data.get("phase", "En espera...")
+            run_id = status_data.get("run_id", current_run.name if current_run else "None")
+            phase_name = status_data.get("phase", "Waiting...")
             workers_info = status_data.get("workers", {})
 
-            # Si no hay status.json pero hay archivos agente-*.log o .json
+            # If there is no status.json but there are agent-*.log or .json files
             if current_run and not workers_info:
-                for f in current_run.glob("agente-*.log"):
-                    m = re.match(r"agente-(\d+)\.log", f.name)
+                for f in current_run.glob("agent-*.log"):
+                    m = re.match(r"agent-(\d+)\.log", f.name)
                     if m:
                         n = int(m.group(1))
-                        workers_info.setdefault(str(n), {"n": n, "role": f"Agente {n}", "status": "running"})
-                for f in current_run.glob("agente-*.json"):
-                    m = re.match(r"agente-(\d+)\.json", f.name)
+                        workers_info.setdefault(str(n), {"n": n, "role": f"Agent {n}", "status": "running"})
+                for f in current_run.glob("agent-*.json"):
+                    m = re.match(r"agent-(\d+)\.json", f.name)
                     if m:
                         try:
                             j = json.loads(f.read_text(encoding="utf-8"))
                             n = j.get("n", int(m.group(1)))
                             workers_info[str(n)] = {
                                 "n": n,
-                                "role": j.get("role", f"Agente {n}"),
+                                "role": j.get("role", f"Agent {n}"),
                                 "worker": j.get("worker", "agy"),
                                 "model": j.get("model", ""),
                                 "status": "ok" if j.get("exit", 0) == 0 else "error",
@@ -208,79 +208,79 @@ def run_monitor():
                         except Exception:
                             pass
 
-            # Actualizar lectores de log
+            # Update the log readers
             for n_str in workers_info.keys():
                 n = int(n_str)
-                log_file = current_run / f"agente-{n}.log" if current_run else None
+                log_file = current_run / f"agent-{n}.log" if current_run else None
                 if log_file and n not in readers:
                     readers[n] = AgentLogReader(log_file)
                 if n in readers:
                     readers[n].update()
 
-            # BUFFER DE SALIDA
-            out_buf = ["\033[H"]  # Mover cursor al inicio (sin parpadeo)
+            # OUTPUT BUFFER
+            out_buf = ["\033[H"]  # Move the cursor to the top (no flicker)
 
-            # 1. ENCABEZADO
-            title = " 🚀 ORQUESTADOR MULTI-AGENTE (CLI MONITOR) "
+            # 1. HEADER
+            title = " 🚀 MULTI-AGENT ORCHESTRATOR (CLI MONITOR) "
             header = f"{BG_BLUE}{WHITE}{BOLD}{title.center(cols)}{RESET}"
-            sub_info = f" Run: {BOLD}{run_id}{RESET} │ Fase: {CYAN}{phase_name[:25]}{RESET} │ Agentes: {BOLD}{len(workers_info)}{RESET} │ Teclas: [1-9] Ver agente | [0] Todos | [Q] Salir "
+            sub_info = f" Run: {BOLD}{run_id}{RESET} │ Phase: {CYAN}{phase_name[:25]}{RESET} │ Agents: {BOLD}{len(workers_info)}{RESET} │ Keys: [1-9] View agent | [0] All | [Q] Quit "
             out_buf.append(header + "\n")
             out_buf.append(sub_info.ljust(cols)[:cols] + "\n")
             out_buf.append(f"{DIM}{'─' * cols}{RESET}\n")
 
-            # 2. PESTAÑAS DE AGENTES
+            # 2. AGENT TABS
             tabs = []
             for n_str, winfo in sorted(workers_info.items(), key=lambda x: int(x[0])):
                 n = int(n_str)
-                role = winfo.get("role", f"Agente {n}")
+                role = winfo.get("role", f"Agent {n}")
                 st = winfo.get("status", "running")
                 icon = f"{GREEN}✔{RESET}" if st == "ok" else f"{RED}✖{RESET}" if st == "error" else f"{YELLOW}{spinner}{RESET}"
                 worker_lbl = winfo.get("worker", "agy")
-                
+
                 is_sel = (selected_agent == n)
                 style_on = f"{BG_GRAY}{BOLD}" if is_sel else ""
                 style_off = f"{RESET}"
                 tabs.append(f"{style_on}[{n}] {icon} {role[:12]} ({worker_lbl}){style_off}")
 
-            tab_line = "  " + "  │  ".join(tabs) if tabs else "  (Esperando a que el orquestador despache agentes...)"
+            tab_line = "  " + "  │  ".join(tabs) if tabs else "  (Waiting for the orchestrator to dispatch agents...)"
             out_buf.append(tab_line[:cols] + "\n")
             out_buf.append(f"{DIM}{'─' * cols}{RESET}\n")
 
-            # 3. CUERPO DE LOGS / VISOR CLI
+            # 3. LOG BODY / CLI VIEWER
             usable_rows = max(5, rows - 7)
 
             if selected_agent == 0:
-                # VISTA MOSAICO (Divide las líneas entre los agentes activos)
+                # TILED VIEW (splits the lines among the active agents)
                 num_w = max(1, len(readers))
                 lines_per_w = max(2, usable_rows // num_w)
                 for n, r in sorted(readers.items()):
                     winfo = workers_info.get(str(n), {})
-                    r_title = f"{BOLD}--- Agente {n}: {winfo.get('role', '')} ({winfo.get('worker', '')}) ---{RESET}"
+                    r_title = f"{BOLD}--- Agent {n}: {winfo.get('role', '')} ({winfo.get('worker', '')}) ---{RESET}"
                     out_buf.append(r_title[:cols] + "\n")
-                    w_lines = r.lines[-lines_per_w:] if r.lines else [f"  {DIM}(Esperando comandos...){RESET}"]
+                    w_lines = r.lines[-lines_per_w:] if r.lines else [f"  {DIM}(Waiting for commands...){RESET}"]
                     for l in w_lines:
                         out_buf.append(format_cli_line(l, cols) + "\n")
             else:
-                # VISTA DETALLADA DEL AGENTE SELECCIONADO
+                # DETAILED VIEW OF THE SELECTED AGENT
                 r = readers.get(selected_agent)
                 winfo = workers_info.get(str(selected_agent), {})
-                agent_title = f" {CYAN}● CONSOLA EN VIVO:{RESET} Agente {selected_agent} «{winfo.get('role', 'N/A')}» | Modelo: {winfo.get('model', 'auto')} "
+                agent_title = f" {CYAN}● LIVE CONSOLE:{RESET} Agent {selected_agent} '{winfo.get('role', 'N/A')}' | Model: {winfo.get('model', 'auto')} "
                 out_buf.append(agent_title[:cols] + "\n")
-                
+
                 if r and r.lines:
                     visible_lines = r.lines[-usable_rows:]
                     for l in visible_lines:
                         out_buf.append(format_cli_line(l, cols) + "\n")
-                    # Rellenar filas vacías para evitar saltos
+                    # Pad with empty rows to avoid jumps
                     for _ in range(usable_rows - len(visible_lines)):
                         out_buf.append(" " * cols + "\n")
                 else:
-                    out_buf.append(f"\n   {DIM}Iniciando CLI del subagente... esperando primeras trazas de ejecución.{RESET}\n")
+                    out_buf.append(f"\n   {DIM}Starting the subagent's CLI... waiting for the first execution traces.{RESET}\n")
                     for _ in range(usable_rows - 2):
                         out_buf.append(" " * cols + "\n")
 
             # 4. FOOTER STATUS
-            footer = f"{DIM}Presiona 1, 2, 3... para enfocar un agente | Q para cerrar el monitor{RESET}"
+            footer = f"{DIM}Press 1, 2, 3... to focus an agent | Q to close the monitor{RESET}"
             out_buf.append(footer[:cols])
 
             sys.stdout.write("".join(out_buf))
@@ -290,9 +290,9 @@ def run_monitor():
     except KeyboardInterrupt:
         pass
     finally:
-        sys.stdout.write("\033[?25h")  # Restaurar cursor
+        sys.stdout.write("\033[?25h")  # Restore the cursor
         clear_screen()
-        print("Monitor cerrado.")
+        print("Monitor closed.")
 
 
 if __name__ == "__main__":

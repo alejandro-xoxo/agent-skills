@@ -1,3 +1,5 @@
-# Memoria de procesos
+# Process memory
 
-Aquí viven los procesos guardados, una carpeta por proceso. No se editan a mano: se crean con `node ../scripts/proceso.mjs guardar <nombre>`, que solo acepta un proceso que se haya ejecutado de principio a fin sin errores y con el resultado verificado. Para ver qué hay, ejecuta `node ../scripts/proceso.mjs listar`.
+Saved processes live here, one folder per process. They are not edited by hand: they are created with `node ../scripts/proceso.mjs guardar <name>`, which only accepts a process that has run from start to finish without errors and with its result verified. To see what is here, run `node ../scripts/proceso.mjs listar`.
+
+(`LEEME.md` is Spanish for "README". The file name is kept because `.gitignore` refers to it.)

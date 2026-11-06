@@ -1,0 +1,12 @@
+{
+  "note": "Copy this file as evaluation.json and change the questions to 15 or 20 of your own. 'expected' lists the files where the answer is, as the index shows them (those of the vault start with 'vault/'; those of docs, with 'docs/'); any one of them counts. 'negatives' are messages that are NOT about the project. Run 'rag.py evaluate' to see the hit rate of each method and the recommended threshold.",
+  "questions": [
+    {"q": "What did we decide about the database and why?", "expected": ["vault/04 Decisions/Decisions.md", "docs/DECISIONS.md"]},
+    {"q": "Where did the work stand last time?", "expected": ["docs/STATE.md"]}
+  ],
+  "negatives": [
+    "give me the command to make a git commit with a message",
+    "what is the capital of France",
+    "translate this sentence into Spanish: good morning everyone"
+  ]
+}

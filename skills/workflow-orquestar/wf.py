@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LicenseRef-Proprietary — Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 # Copyright (c) 2026 alejandro-xoxo
-"""wf: orquestador de agentes de CLI (OpenCode, agy y Codex).
+"""wf: orchestrator of CLI agents (OpenCode, agy and Codex).
 
-El agente que lidera (un LLM) escribe un script corto con las primitivas (`phase`, `log`, `agent`, `parallel`, `pipeline`, `task`, `dag`, `check_collisions`, `auto_integrate`),
-lo lanza con `python wf.py script.py` y lee el resultado. Cada `agent()` ejecuta un CLI de verdad (`opencode run`, `agy -p` o `codex exec`),
-le exige el resultado dentro de unas marcas, lo valida contra un esquema JSON y lo devuelve ya convertido a Python.
+The leading agent (an LLM) writes a short script with the primitives (`phase`, `log`, `agent`, `parallel`, `pipeline`, `task`, `dag`, `check_collisions`, `auto_integrate`),
+launches it with `python wf.py script.py` and reads the result. Each `agent()` runs a real CLI (`opencode run`, `agy -p` or `codex exec`),
+requires the result inside a pair of markers, validates it against a JSON schema and returns it already converted to Python.
 
     python wf.py script.py [--args '{"a": 1}'] [--dry]
     python wf.py --monitor
 
-El script puede usar `await` al nivel superior y ya trae las primitivas, más `args` y `WORKSPACES`. Con `--dry` no lanza nada:
-solo imprime los comandos.
+The script may use top-level `await` and already has the primitives, plus `args` and `WORKSPACES`. With `--dry` nothing is launched:
+it only prints the commands.
 """
 from __future__ import annotations
 
@@ -30,26 +30,26 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
-BLOCK = re.compile(r"<{2,3}\s*WF_RESULT\s*(.*?)\s*WF_RESULT\s*>{2,3}", re.S)        # tolera «<<» y espacios
+BLOCK = re.compile(r"<{2,3}\s*WF_RESULT\s*(.*?)\s*WF_RESULT\s*>{2,3}", re.S)        # tolerates «<<» and spaces
 UNAVAILABLE = re.compile(r"RESOURCE_EXHAUSTED|quota|need to sign in|sign in to use|not signed in|unauthori[sz]ed|rate.?limit|"
                          r"insufficient (credits|funds|balance)|no credentials|payment required|credit", re.I)
 
-# Precios estimados por millón de tokens (in, out) en USD
+# Estimated prices per million tokens (in, out) in USD
 COSTS_PER_MILLION = {
     "gemini-3.8-flash-high": (0.075, 0.30),
     "gemini-3.8-flash-medium": (0.075, 0.30),
     "gemini-3.8-flash-low": (0.075, 0.30),
     "gemini-4-argon-high": (1.25, 5.00),
     "claude-sonnet-5-5-medium": (3.00, 15.00),
-    "default": (0.0, 0.0),  # modelos gratuitos por defecto (opencode)
+    "default": (0.0, 0.0),  # free models by default (opencode)
 }
 
-# Niveles de calidad por trabajador (editables en models.json)
+# Quality levels per worker (editable in models.json)
 TIERS = {
-    # OpenCode: modelos gratuitos (nemotron, deepseek, minimax)
+    # OpenCode: free models (nemotron, deepseek, minimax)
     "opencode": {"max": "opencode/nemotron-3-ultra-free", "pro": "opencode/nemotron-3-ultra-free",
                  "standard": "opencode/deepseek-v4.1-flash-free", "fast": "opencode/minimax-m3.1-flash-free"},
-    # Antigravity CLI con Gemini / Claude
+    # Antigravity CLI with Gemini / Claude
     "agy": {"max": "gemini-4-argon-high", "pro": "gemini-3.8-flash-high", "standard": "gemini-3.8-flash-medium",
             "fast": "gemini-3.8-flash-low", "design": "claude-sonnet-5-5-medium"},
     # Codex (OpenAI)
@@ -67,15 +67,17 @@ CLI_WORKERS = {"claude": [], "agy": ["agy"], "opencode": ["opencode"], "codex": 
 
 
 def orchestrator() -> str:
-    """El CLI orquestador que eligió la persona al instalar (`orquestador.json`); «claude» si no hay archivo."""
-    try:
-        return str(json.loads((HERE / "orquestador.json").read_text(encoding="utf-8")).get("orquestador", "claude"))
-    except (OSError, ValueError, AttributeError):
-        return "claude"
+    """The orchestrator CLI the person chose at install time (`orchestrator.json`, or the older name `orquestador.json`); "claude" if there is no file."""
+    for name, key in (("orchestrator.json", "orchestrator"), ("orquestador.json", "orquestador")):
+        try:
+            return str(json.loads((HERE / name).read_text(encoding="utf-8")).get(key, "claude"))
+        except (OSError, ValueError, AttributeError):
+            continue
+    return "claude"
 
 
 def default_workers() -> tuple[str, ...]:
-    """Orden de preferencia: opencode primero (gratuito) y agy de respaldo. El CLI orquestador va al final."""
+    """Order of preference: opencode first (free) and agy as a fallback. The orchestrator CLI goes last."""
     base = [w for w in os.environ.get("WF_WORKERS", "opencode,agy").split(",") if w]
     mine = CLI_WORKERS.get(orchestrator(), [])
     return tuple([w for w in base if w not in mine] + [w for w in base if w in mine])
@@ -86,7 +88,7 @@ RUN_ID = datetime.now().strftime("%Y%m%d-%H%M%S")
 RUN_DIR = Path(os.environ.get("WF_RUNS") or tempfile.gettempdir()) / "wf-runs" / RUN_ID
 EXTRA_ENV: dict[str, str] = {}
 DEAD: set[str] = set()
-WORKTREES: list[tuple[str, str, str]] = []                      # (rama, carpeta, repositorio)
+WORKTREES: list[tuple[str, str, str]] = []                      # (branch, folder, repository)
 STATS: list[dict] = []
 _phase = ""
 _counter = 0
@@ -95,14 +97,14 @@ _start_time = time.time()
 
 
 class WorkerUnavailable(RuntimeError):
-    """El CLI no está, no tiene sesión o se quedó sin cuota."""
+    """The CLI is missing, has no session or ran out of quota."""
 
 
 class WorkerError(RuntimeError):
-    """El agente terminó pero sin un resultado válido."""
+    """The agent finished but without a valid result."""
 
 
-# ---------------------------------------------------------------- registro y telemetría
+# ---------------------------------------------------------------- logging and telemetry
 def log(*parts) -> None:
     line = f"[{datetime.now():%H:%M:%S}]{f' [{_phase}]' if _phase else ''} " + " ".join(str(p) for p in parts)
     print(line, flush=True)
@@ -117,12 +119,12 @@ def log(*parts) -> None:
 def phase(name: str) -> None:
     global _phase
     _phase = name
-    log("=== fase:", name)
+    log("=== phase:", name)
     update_status()
 
 
 def update_status(worker_num: int | None = None, **kwargs) -> None:
-    """Registra en disco el estado en tiempo real para que monitor.py lo visualice."""
+    """Writes the real-time state to disk so monitor.py can display it."""
     try:
         RUN_DIR.mkdir(parents=True, exist_ok=True)
         status_file = RUN_DIR / "status.json"
@@ -145,7 +147,7 @@ def update_status(worker_num: int | None = None, **kwargs) -> None:
 
 
 def estimate_tokens(prompt_text: str, output_text: str) -> tuple[int, int]:
-    """Estima tokens de entrada y salida (~3.8 caracteres por token)."""
+    """Estimates input and output tokens (~3.8 characters per token)."""
     return max(1, int(len(prompt_text) / 3.8)), max(1, int(len(output_text) / 3.8))
 
 
@@ -154,9 +156,9 @@ def estimate_cost(model: str, in_tok: int, out_tok: int) -> float:
     return (in_tok / 1_000_000) * r_in + (out_tok / 1_000_000) * r_out
 
 
-# ---------------------------------------------------------------- esquema
-def validate(value, schema, path="resultado") -> None:
-    """Validación mínima de JSON Schema."""
+# ---------------------------------------------------------------- schema
+def validate(value, schema, path="result") -> None:
+    """Minimal JSON Schema validation."""
     if not isinstance(schema, dict) or not schema:
         return
     types = {"object": dict, "array": list, "string": str, "number": (int, float), "integer": int, "boolean": bool, "null": type(None)}
@@ -170,13 +172,13 @@ def validate(value, schema, path="resultado") -> None:
     else:
         ok = True
     if not ok:
-        raise ValueError(f"{path}: se esperaba {t}")
+        raise ValueError(f"{path}: expected {t}")
     if "enum" in schema and value not in schema["enum"]:
-        raise ValueError(f"{path}: debe ser uno de {schema['enum']}")
+        raise ValueError(f"{path}: must be one of {schema['enum']}")
     if t == "object":
         for k in schema.get("required", []):
             if k not in value:
-                raise ValueError(f"{path}: falta «{k}»")
+                raise ValueError(f"{path}: missing '{k}'")
         for k, sub in schema.get("properties", {}).items():
             if k in value:
                 validate(value[k], sub, f"{path}.{k}")
@@ -188,14 +190,14 @@ def validate(value, schema, path="resultado") -> None:
 def extract(text: str, schema):
     clean = ANSI.sub("", text)
     is_text = isinstance(schema, dict) and schema.get("type") == "string"
-    last_err = "no hay bloque de resultado"
+    last_err = "there is no result block"
     for raw in reversed(BLOCK.findall(clean)):
         try:
             value = json.loads(raw)
         except ValueError:
-            if is_text and raw.strip() and "<resultado" not in raw:
+            if is_text and raw.strip() and "<result" not in raw:
                 return raw.strip()
-            last_err = "el bloque no es JSON válido"
+            last_err = "the block is not valid JSON"
             continue
         try:
             validate(value, schema)
@@ -215,30 +217,30 @@ def example(schema) -> str:
     if t == "array":
         item = example(schema.get("items", {"type": "string"}))
         return f"[{item}, {item}]"
-    return {"integer": "0", "number": "0.0", "boolean": "true", "null": "null"}.get(t, '"texto"')
+    return {"integer": "0", "number": "0.0", "boolean": "true", "null": "null"}.get(t, '"text"')
 
 
 CAVEMAN = os.environ.get("WF_CAVEMAN", "1") != "0"
-ESTILO = ("ESTILO (ultracave): responde con el mínimo de palabras. Fragmentos, sin saludos, sin repetir el encargo, sin resumen final ni "
-          "explicar lo que vas a hacer. Datos, números, rutas, código, comandos y mensajes de error, EXACTOS. Nunca quites una negación "
-          "(no, nunca, solo, excepto). Esto vale para tu texto y para los campos de texto del resultado. Si algo puede leerse de dos "
-          "maneras, o hay un riesgo de seguridad o una acción irreversible, usa frases completas.")
+STYLE = ("STYLE (ultracave): answer with the fewest words possible. Fragments, no greetings, do not repeat the task, no final summary and no "
+         "explaining what you are about to do. Facts, numbers, paths, code, commands and error messages, EXACT. Never drop a negation "
+         "(no, never, only, except). This applies to your text and to the text fields of the result. If something can be read two "
+         "ways, or there is a security risk or an irreversible action, use full sentences.")
 
 
 def wrap(prompt: str, schema) -> str:
     if CAVEMAN:
-        prompt = f"{prompt.rstrip()}\n\n{ESTILO}"
+        prompt = f"{prompt.rstrip()}\n\n{STYLE}"
     if isinstance(schema, dict) and schema.get("type") == "string":
-        shape, form = "texto libre (sin JSON ni comillas)", ""
+        shape, form = "free text (no JSON or quotes)", ""
     else:
-        shape = "el valor en JSON válido, SOLO el valor: no lo envuelvas en otra estructura ni copies el esquema"
-        form = f"Forma esperada (los valores son de relleno, solo muestran la forma): {example(schema)}\n"
-    return (f"{prompt.rstrip()}\n\n---\nFORMATO DE LA RESPUESTA (obligatorio): termina con el resultado entre estas dos líneas y sin "
-            f"nada más entre ellas. Contenido: {shape}.\n{form}Esquema para validar: {json.dumps(schema, ensure_ascii=False)}\n"
-            "<<<WF_RESULT\n<resultado aquí>\nWF_RESULT>>>\n")
+        shape = "the value as valid JSON, ONLY the value: do not wrap it in another structure and do not copy the schema"
+        form = f"Expected shape (the values are placeholders, they only show the shape): {example(schema)}\n"
+    return (f"{prompt.rstrip()}\n\n---\nRESPONSE FORMAT (mandatory): end with the result between these two lines and nothing "
+            f"else between them. Content: {shape}.\n{form}Schema to validate against: {json.dumps(schema, ensure_ascii=False)}\n"
+            "<<<WF_RESULT\n<result here>\nWF_RESULT>>>\n")
 
 
-# ---------------------------------------------------------------- trabajadores
+# ---------------------------------------------------------------- workers
 def _opencode_native() -> Path | None:
     cmd = shutil.which("opencode.cmd") or shutil.which("opencode")
     if not cmd:
@@ -254,9 +256,9 @@ def _opencode_native() -> Path | None:
 def _opencode(model: str, prompt: str, cwd: Path, edit: bool, timeout: int, tmp: Path) -> list[str]:
     exe = _opencode_native()
     if exe is None:
-        raise WorkerUnavailable("no encuentro el opencode.exe nativo (npm install -g @opencode/cli)")
+        raise WorkerUnavailable("cannot find the native opencode.exe (npm install -g @opencode/cli)")
     if len(prompt) > 28000:
-        raise ValueError("encargo demasiado largo para pasarlo como argumento: pon el contexto en archivos del proyecto y refiérelo")
+        raise ValueError("task too long to pass as an argument: put the context in project files and refer to them")
     argv = [str(exe), "run", "--standalone", "-m", model, "--agent", "build" if edit else "plan"]
     if edit:
         argv.append("--auto")
@@ -266,7 +268,7 @@ def _opencode(model: str, prompt: str, cwd: Path, edit: bool, timeout: int, tmp:
 def _agy(model: str, prompt: str, cwd: Path, edit: bool, timeout: int, tmp: Path) -> list[str]:
     exe = shutil.which("agy")
     if not exe:
-        raise WorkerUnavailable("agy no está instalado")
+        raise WorkerUnavailable("agy is not installed")
     return [exe, "-p", prompt, "--mode", "accept-edits" if edit else "plan", "--model", model,
             "--print-timeout", f"{timeout}s", "--output-format", "stream-json"]
 
@@ -284,9 +286,9 @@ def _codex_exe() -> Path | None:
 def _codex(model: str, prompt: str, cwd: Path, edit: bool, timeout: int, tmp: Path) -> list[str]:
     exe = _codex_exe()
     if exe is None:
-        raise WorkerUnavailable("no encuentro codex (instala Codex e inicia sesión)")
+        raise WorkerUnavailable("cannot find codex (install Codex and sign in)")
     if len(prompt) > 28000:
-        raise ValueError("encargo demasiado largo para pasarlo como argumento: pon el contexto en archivos del proyecto y refiérelo")
+        raise ValueError("task too long to pass as an argument: put the context in project files and refer to them")
     argv = [str(exe), "exec", "-s", "workspace-write" if edit else "read-only", "-C", str(cwd), "--skip-git-repo-check",
             "--ephemeral", "--color", "never"]
     if model and model != "default":
@@ -297,25 +299,25 @@ def _codex(model: str, prompt: str, cwd: Path, edit: bool, timeout: int, tmp: Pa
 WORKERS = {"opencode": _opencode, "agy": _agy, "codex": _codex}
 
 
-def _evento_agy(linea: str) -> tuple[str | None, str | None, str | None]:
-    """Traduce una línea de `agy --output-format stream-json` a (línea legible para el log, respuesta final, texto parcial).
-    Una línea que no es JSON (p. ej. un error del propio CLI) se deja tal cual en el log."""
+def _agy_event(line: str) -> tuple[str | None, str | None, str | None]:
+    """Translates one line of `agy --output-format stream-json` into (readable line for the log, final answer, partial text).
+    A line that is not JSON (e.g. an error from the CLI itself) is left as it is in the log."""
     try:
-        ev = json.loads(linea)
+        ev = json.loads(line)
     except ValueError:
-        return linea.rstrip("\n"), None, None
+        return line.rstrip("\n"), None, None
     if not isinstance(ev, dict):
-        return linea.rstrip("\n"), None, None
+        return line.rstrip("\n"), None, None
     if ev.get("event") == "result":
         r = ev.get("result") or {}
-        resumen = f"✔ {r.get('status')} ({r.get('duration_seconds')}s)"
-        return resumen, str(r.get("response") or "") if r.get("status") == "SUCCESS" else json.dumps(r, ensure_ascii=False), None
+        summary_line = f"✔ {r.get('status')} ({r.get('duration_seconds')}s)"
+        return summary_line, str(r.get("response") or "") if r.get("status") == "SUCCESS" else json.dumps(r, ensure_ascii=False), None
     if ev.get("event") == "step_update":
         s = ev.get("step_update") or {}
         if s.get("step_type") == "tool" and s.get("state") == "ACTIVE":
             params = (s.get("tool_info") or {}).get("parameters") or {}
-            detalle = next((str(v) for v in params.values() if isinstance(v, str) and v), "")
-            return f"🔧 {s.get('tool_name')} {detalle}"[:220], None, None
+            detail = next((str(v) for v in params.values() if isinstance(v, str) and v), "")
+            return f"🔧 {s.get('tool_name')} {detail}"[:220], None, None
         if s.get("step_type") == "agent_response" and s.get("text_delta"):
             delta = s["text_delta"]
             return "💬 " + delta.strip().replace("\n", " ")[:200], None, delta
@@ -327,7 +329,7 @@ async def _exec(argv: list[str], cwd: Path, timeout: int, log_path: Path | None 
                                                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
                                                 env={**os.environ, **EXTRA_ENV, "PWD": str(cwd)})
     buffer = []
-    parcial = []  # texto del agente por si el CLI termina sin evento final
+    partial = []  # the agent's text, in case the CLI ends without a final event
     final = []
     stream = "stream-json" in argv
     log_file = None
@@ -343,15 +345,15 @@ async def _exec(argv: list[str], cwd: Path, timeout: int, log_path: Path | None 
                     break
                 line = line_bytes.decode("utf-8", "replace")
                 if stream:
-                    visible, respuesta, delta = _evento_agy(line)
-                    if respuesta is not None:
-                        final.append(respuesta)
+                    visible, answer, delta = _agy_event(line)
+                    if answer is not None:
+                        final.append(answer)
                     if delta:
-                        parcial.append(delta)
+                        partial.append(delta)
                     if visible is None:
                         continue
-                    if respuesta is None and delta is None and not line.lstrip().startswith("{"):
-                        buffer.append(line)  # texto suelto del CLI (errores, cuota): se conserva para detectarlo
+                    if answer is None and delta is None and not line.lstrip().startswith("{"):
+                        buffer.append(line)  # loose text from the CLI (errors, quota): kept so it can be detected
                     line = visible + "\n"
                 else:
                     buffer.append(line)
@@ -369,7 +371,7 @@ async def _exec(argv: list[str], cwd: Path, timeout: int, log_path: Path | None 
             log_file.close()
 
     if stream:
-        buffer.append("".join(final) or "".join(parcial))
+        buffer.append("".join(final) or "".join(partial))
     return proc.returncode or 0, "".join(buffer)
 
 
@@ -383,7 +385,7 @@ def _kill(pid: int) -> None:
         pass
 
 
-# ---------------------------------------------------------------- espacios de trabajo y fusión
+# ---------------------------------------------------------------- workspaces and merging
 def _git(*args: str, cwd: Path) -> str:
     return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True).stdout.strip()
 
@@ -400,7 +402,7 @@ def make_branch(n: int, base: Path) -> tuple[Path, str]:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
     for cmd in (["init", "-q"], ["config", "user.email", "wf@local"], ["config", "user.name", "wf"], ["config", "core.autocrlf", "false"],
-                ["config", "core.safecrlf", "false"], ["checkout", "-q", "-b", branch], ["add", "-A"], ["commit", "-qm", "foto de partida (wf)"]):
+                ["config", "core.safecrlf", "false"], ["checkout", "-q", "-b", branch], ["add", "-A"], ["commit", "-qm", "starting snapshot (wf)"]):
         _git(*cmd, cwd=folder)
     WORKTREES.append((branch, str(folder), str(top)))
     return folder, branch
@@ -431,12 +433,12 @@ def cleanup_worktrees(delete_branches: bool = False) -> None:
         try:
             _rmtree(folder)
         except Exception as ex:
-            log("no se pudo limpiar", folder, "-", type(ex).__name__, str(ex)[:100])
+            log("could not clean up", folder, "-", type(ex).__name__, str(ex)[:100])
     WORKTREES.clear()
 
 
 def check_collisions() -> dict[str, list[str]]:
-    """Detecta si dos o más copias aisladas modificaron los mismos archivos."""
+    """Detects whether two or more isolated copies modified the same files."""
     mods: dict[str, list[str]] = {}
     for branch, folder, _top in WORKTREES:
         p = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=folder, capture_output=True, text=True)
@@ -448,10 +450,10 @@ def check_collisions() -> dict[str, list[str]]:
 
 
 def auto_integrate(target_repo: Path | None = None) -> list[str]:
-    """Integra automáticamente copias no colisionantes usando 3-way merge (`git apply --3way`)."""
+    """Automatically integrates non-colliding copies using a 3-way merge (`git apply --3way`)."""
     colls = check_collisions()
     if colls:
-        raise RuntimeError(f"Colisión de archivos detectada entre tareas: {colls}. Resuelve manualmente.")
+        raise RuntimeError(f"File collision detected between tasks: {colls}. Resolve it manually.")
     integrated = []
     for branch, folder, top in list(WORKTREES):
         target = target_repo or Path(top)
@@ -461,26 +463,26 @@ def auto_integrate(target_repo: Path | None = None) -> list[str]:
             continue
         apply_p = subprocess.run(["git", "apply", "--3way", "--whitespace=fix"], input=diff_text, text=True, cwd=str(target), capture_output=True)
         if apply_p.returncode != 0:
-            raise RuntimeError(f"Error aplicando cambios de {branch}: {apply_p.stderr.strip() or apply_p.stdout.strip()}")
+            raise RuntimeError(f"Error applying the changes from {branch}: {apply_p.stderr.strip() or apply_p.stdout.strip()}")
         integrated.append(branch)
     return integrated
 
 
-# ---------------------------------------------------------------- agentes
+# ---------------------------------------------------------------- agents
 class Agent:
     def __init__(self, prompt=None, schema=None, role=None, tier="standard", worker=None, workspace="inherit", edit=False,
                  timeout=1800, model=None, retries=1, verify_cmd: str | None = None, max_fixes: int = 2):
         global _counter
         _counter += 1
-        self.n, self.prompt, self.schema, self.role = _counter, prompt, schema, role or (prompt or "agente").strip().splitlines()[0][:50]
+        self.n, self.prompt, self.schema, self.role = _counter, prompt, schema, role or (prompt or "agent").strip().splitlines()[0][:50]
         self.tier, self.model, self.workspace, self.edit, self.timeout, self.retries = tier, model, workspace, edit, timeout, retries
         self.verify_cmd = verify_cmd
         self.max_fixes = max_fixes
         self.workers = [worker] if isinstance(worker, str) else list(worker or DEFAULT_WORKERS)
         if edit and workspace != "branch":
-            raise ValueError("un agente que edita debe usar workspace='branch' (no se edita el árbol principal)")
+            raise ValueError("an agent that edits must use workspace='branch' (the main tree is never edited)")
         if workspace not in ("inherit", "branch"):
-            raise ValueError("workspace: 'inherit' o 'branch'")
+            raise ValueError("workspace: 'inherit' or 'branch'")
         self.history: list[tuple[str, str]] = []
         self._done, self._value = False, None
         self._cwd: Path | None = None
@@ -491,7 +493,7 @@ class Agent:
     async def _once(self):
         if not self._done:
             if self.prompt is None:
-                raise ValueError("agent() sin prompt: llámalo con a(prompt, schema)")
+                raise ValueError("agent() without a prompt: call it as a(prompt, schema)")
             self._value, self._done = await self._turn(self.prompt, self.schema), True
         return self._value
 
@@ -500,7 +502,7 @@ class Agent:
 
     async def _turn(self, prompt: str, schema, standing: str | None = None):
         schema = schema if schema is not None else {"type": "string"}
-        text = (f"{standing}\n\n" if standing else "") + "".join(f"[Turno anterior]\n{q}\n[Tu respuesta]\n{a}\n\n" for q, a in self.history) + prompt
+        text = (f"{standing}\n\n" if standing else "") + "".join(f"[Previous turn]\n{q}\n[Your answer]\n{a}\n\n" for q, a in self.history) + prompt
         global _sem
         _sem = _sem or asyncio.Semaphore(MAX_PARALLEL)
         async with _sem:
@@ -519,14 +521,14 @@ class Agent:
                 return await self._run(worker, model, prompt, schema)
             except WorkerUnavailable as ex:
                 DEAD.add(worker)
-                log(f"{worker} no disponible ({ex}); paso al siguiente trabajador")
+                log(f"{worker} unavailable ({ex}); moving on to the next worker")
                 errors.append(f"{worker}: {ex}")
             except WorkerError as ex:
                 last = ex
-                log(f"{worker}/{model} no dio un resultado válido ({ex}); paso al siguiente trabajador")
+                log(f"{worker}/{model} did not give a valid result ({ex}); moving on to the next worker")
         if last:
             raise last
-        raise WorkerUnavailable("ningún trabajador disponible: " + "; ".join(errors or ["lista vacía"]))
+        raise WorkerUnavailable("no worker available: " + "; ".join(errors or ["empty list"]))
 
     async def _run(self, worker: str, model: str, prompt: str, schema):
         if self._cwd is None:
@@ -534,37 +536,37 @@ class Agent:
             self._cwd, branch = (make_branch(self.n, Path.cwd()) if self.workspace == "branch" else (Path.cwd(), ""))
             self.branch = branch
             if branch:
-                log(f"agente {self.n} «{self.role}»: rama {branch} en {self._cwd}")
+                log(f"agent {self.n} '{self.role}': branch {branch} in {self._cwd}")
         extra = ""
         guard = None if DRY else self._top
         before = main_state(guard) if guard else None
         for attempt in range(self.retries + 1):
             tmp = Path(tempfile.mkdtemp(prefix="wf-"))
             argv = WORKERS[worker](model, prompt + extra, self._cwd, self.edit, self.timeout, tmp)
-            log(f"agente {self.n} «{self.role}» → {worker}/{model}" + (f" (intento {attempt + 1})" if attempt else ""))
+            log(f"agent {self.n} '{self.role}' -> {worker}/{model}" + (f" (attempt {attempt + 1})" if attempt else ""))
             if DRY:
                 log("  [dry] " + " ".join(f'"{a}"' if " " in a else a for a in argv)[:600])
                 return {} if isinstance(schema, dict) and schema.get("type") == "object" else [] if schema.get("type") == "array" else ""
             t0 = time.time()
             update_status(self.n, role=self.role, worker=worker, model=model, status="running", started_at=t0)
-            log_file = RUN_DIR / f"agente-{self.n}.log"
+            log_file = RUN_DIR / f"agent-{self.n}.log"
             try:
                 code, out = await _exec(argv, self._cwd, self.timeout, log_path=log_file)
             except asyncio.TimeoutError:
                 STATS.append({"n": self.n, "role": self.role, "worker": worker, "model": model, "cwd": str(self._cwd),
-                              "secs": round(time.time() - t0, 1), "exit": -1, "tail": "", "ok": False, "why": "tiempo agotado",
+                              "secs": round(time.time() - t0, 1), "exit": -1, "tail": "", "ok": False, "why": "timed out",
                               "in_tok": 0, "out_tok": 0, "cost": 0.0})
                 if attempt == self.retries:
-                    raise WorkerError(f"agente {self.n} «{self.role}»: tiempo agotado ({self.timeout}s)") from None
+                    raise WorkerError(f"agent {self.n} '{self.role}': timed out ({self.timeout}s)") from None
                 continue
             clean = ANSI.sub("", out)
             after = main_state(guard) if guard else None
             if guard and after != before:
-                cambios = sorted(set(after.splitlines()) ^ set(before.splitlines()))[:8]
-                que = "EDITÓ" if not self.edit else "TOCÓ"
-                raise RuntimeError(f"agente {self.n} «{self.role}» ({worker}) {que} EL ÁRBOL PRINCIPAL ({guard})"
-                                   + (" siendo de solo lectura" if not self.edit else " en vez de su copia") + f". Cambios: {cambios}. "
-                                   "Revisa `git status` ahí y descarta lo que no quieras; no uses este trabajador para esto.")
+                changes = sorted(set(after.splitlines()) ^ set(before.splitlines()))[:8]
+                what = "EDITED" if not self.edit else "TOUCHED"
+                raise RuntimeError(f"agent {self.n} '{self.role}' ({worker}) {what} THE MAIN TREE ({guard})"
+                                   + (" while being read-only" if not self.edit else " instead of its copy") + f". Changes: {changes}. "
+                                   "Check `git status` there and discard whatever you do not want; do not use this worker for this.")
             in_tok, out_tok = estimate_tokens(prompt + extra, clean)
             cost_val = estimate_cost(model, in_tok, out_tok)
             rec = {"n": self.n, "role": self.role, "worker": worker, "model": model, "cwd": str(self._cwd), "secs": round(time.time() - t0, 1),
@@ -572,22 +574,22 @@ class Agent:
             try:
                 value = extract(clean, schema)
 
-                # Bucle de auto-corrección (Self-healing con verify_cmd)
+                # Self-healing loop (verify_cmd)
                 if self.edit and self.verify_cmd and not DRY:
                     for fix_idx in range(self.max_fixes):
-                        log(f"agente {self.n} «{self.role}»: ejecutando verificación ({self.verify_cmd})...")
+                        log(f"agent {self.n} '{self.role}': running verification ({self.verify_cmd})...")
                         v_proc = subprocess.run(self.verify_cmd, shell=True, cwd=str(self._cwd), capture_output=True, text=True, timeout=300)
                         if v_proc.returncode == 0:
-                            log(f"agente {self.n} «{self.role}»: verificación exitosa ✓ ({self.verify_cmd})")
+                            log(f"agent {self.n} '{self.role}': verification passed ✓ ({self.verify_cmd})")
                             break
                         trace = ((v_proc.stderr or "") + "\n" + (v_proc.stdout or "")).strip()[-1800:]
-                        log(f"agente {self.n} «{self.role}»: fallo de verificación ({v_proc.returncode}). Auto-corrección {fix_idx + 1}/{self.max_fixes}...")
+                        log(f"agent {self.n} '{self.role}': verification failed ({v_proc.returncode}). Self-healing {fix_idx + 1}/{self.max_fixes}...")
                         fix_prompt = (
-                            f"El código que modificaste produjo un error al ejecutar '{self.verify_cmd}' (código {v_proc.returncode}):\n"
+                            f"The code you changed produced an error when running '{self.verify_cmd}' (code {v_proc.returncode}):\n"
                             f"```\n{trace}\n```\n"
-                            f"Corrige los archivos necesarios en tu copia para que la verificación pase."
+                            f"Fix the necessary files in your copy so that the verification passes."
                         )
-                        extra += f"\n\n[Turno de corrección - Error de test]:\n{trace}\n"
+                        extra += f"\n\n[Correction turn - Test error]:\n{trace}\n"
                         argv_fix = WORKERS[worker](model, wrap(prompt + extra, schema), self._cwd, True, self.timeout, tmp)
                         code_fix, out_fix = await _exec(argv_fix, self._cwd, self.timeout, log_path=log_file)
                         clean_fix = ANSI.sub("", out_fix)
@@ -602,28 +604,28 @@ class Agent:
                 return value
             except WorkerError as ex:
                 if UNAVAILABLE.search(clean[-2000:]):
-                    STATS.append({**rec, "ok": False, "why": "no disponible"})
-                    raise WorkerUnavailable(clean.strip().splitlines()[-1][:160] if clean.strip() else "sin salida") from None
+                    STATS.append({**rec, "ok": False, "why": "unavailable"})
+                    raise WorkerUnavailable(clean.strip().splitlines()[-1][:160] if clean.strip() else "no output") from None
                 STATS.append({**rec, "ok": False, "why": str(ex)})
                 self._save(rec, None)
-                extra = f"\n\nTu respuesta anterior no cumplió el formato ({ex}). Responde de nuevo con el bloque correcto."
+                extra = f"\n\nYour previous answer did not follow the format ({ex}). Answer again with the correct block."
                 if attempt == self.retries:
-                    raise WorkerError(f"agente {self.n} «{self.role}»: {ex}") from None
+                    raise WorkerError(f"agent {self.n} '{self.role}': {ex}") from None
             finally:
                 shutil.rmtree(tmp, ignore_errors=True)
 
     def _save(self, rec: dict, value) -> None:
         try:
             RUN_DIR.mkdir(parents=True, exist_ok=True)
-            (RUN_DIR / f"agente-{self.n}.json").write_text(json.dumps({**rec, "result": value}, ensure_ascii=False, indent=1), encoding="utf-8")
+            (RUN_DIR / f"agent-{self.n}.json").write_text(json.dumps({**rec, "result": value}, ensure_ascii=False, indent=1), encoding="utf-8")
         except OSError:
             pass
 
 
 def agent(prompt=None, schema=None, role=None, tier="standard", worker=None, workspace="inherit", edit=False, timeout=1800,
           model=None, retries=1, verify_cmd: str | None = None, max_fixes: int = 2) -> Agent:
-    """Define un agente (no corre hasta hacer `await`). `worker`: «opencode» (gratis), «agy» (Gemini/Claude) o «codex».
-    `verify_cmd`: comando opcional de test para auto-corrección si falla."""
+    """Defines an agent (it does not run until you `await` it). `worker`: "opencode" (free), "agy" (Gemini/Claude) or "codex".
+    `verify_cmd`: optional test command used for self-healing when it fails."""
     return Agent(prompt, schema, role, tier, worker, workspace, edit, timeout, model, retries, verify_cmd, max_fixes)
 
 
@@ -632,7 +634,7 @@ async def _aw(x):
 
 
 async def parallel(items, fn):
-    """Llama `fn(item)` por cada elemento y espera todo a la vez (máx. WF_MAX_PARALLEL agentes a la vez). Si uno falla, cancela el resto."""
+    """Calls `fn(item)` for each element and waits for everything at once (at most WF_MAX_PARALLEL agents at a time). If one fails, cancels the rest."""
     items = list(items)
     try:
         async with asyncio.TaskGroup() as tg:
@@ -643,11 +645,11 @@ async def parallel(items, fn):
 
 
 async def pipeline(items, fn):
-    """Como `parallel` pero uno a uno y en orden."""
+    """Like `parallel` but one by one and in order."""
     return [await _aw(fn(i)) for i in list(items)]
 
 
-# ---------------------------------------------------------------- grafos de dependencias (DAG)
+# ---------------------------------------------------------------- dependency graphs (DAG)
 class Task:
     def __init__(self, id: str, prompt: str, schema=None, depends_on: list[Task] | None = None, **agent_kwargs):
         self.id = str(id)
@@ -659,12 +661,12 @@ class Task:
 
 
 def task(id: str, prompt: str, schema=None, depends_on: list[Task] | None = None, **kwargs) -> Task:
-    """Define una tarea con dependencias opcionales para usar con `await dag([...])`."""
+    """Defines a task with optional dependencies, to be used with `await dag([...])`."""
     return Task(id, prompt, schema, depends_on, **kwargs)
 
 
 async def dag(tasks: list[Task]) -> dict[str, any]:
-    """Ejecuta un grafo de tareas resolviendo dependencias de datos y paralelizando tareas listas."""
+    """Runs a graph of tasks, resolving data dependencies and parallelizing the tasks that are ready."""
     tasks_map = {t.id: t for t in tasks}
     results: dict[str, any] = {}
     pending = set(tasks_map.keys())
@@ -684,7 +686,7 @@ async def dag(tasks: list[Task]) -> dict[str, any]:
     visited = set()
     for tid in tasks_map:
         if tid not in visited and has_cycle(tid, visited, set()):
-            raise ValueError(f"Ciclo detectado en las dependencias del DAG (tarea: {tid})")
+            raise ValueError(f"Cycle detected in the DAG dependencies (task: {tid})")
 
     while pending or running:
         ready = [tid for tid in list(pending) if all(dep.id in results for dep in tasks_map[tid].depends_on)]
@@ -696,7 +698,7 @@ async def dag(tasks: list[Task]) -> dict[str, any]:
                 parts = []
                 for dep in t_obj.depends_on:
                     res_str = json.dumps(results[dep.id], ensure_ascii=False) if not isinstance(results[dep.id], str) else results[dep.id]
-                    parts.append(f"[Resultado de {dep.id}]:\n{res_str}")
+                    parts.append(f"[Result of {dep.id}]:\n{res_str}")
                 dep_context = "\n\n".join(parts) + "\n\n"
 
             full_prompt = dep_context + t_obj.prompt
@@ -705,7 +707,7 @@ async def dag(tasks: list[Task]) -> dict[str, any]:
 
         if not running:
             if pending:
-                raise RuntimeError(f"Tareas bloqueadas sin resolver dependencias: {pending}")
+                raise RuntimeError(f"Tasks blocked with unresolved dependencies: {pending}")
             break
 
         done, _ = await asyncio.wait(running.values(), return_when=asyncio.FIRST_COMPLETED)
@@ -718,7 +720,7 @@ async def dag(tasks: list[Task]) -> dict[str, any]:
     return results
 
 
-# ---------------------------------------------------------------- resumen y cli
+# ---------------------------------------------------------------- summary and cli
 def summary() -> None:
     ok = sum(1 for s in STATS if s["ok"])
     total_time = round(time.time() - _start_time, 1)
@@ -728,13 +730,13 @@ def summary() -> None:
     total_out = sum(s.get("out_tok", 0) for s in STATS)
     total_cost = round(sum(s.get("cost", 0.0) for s in STATS), 4)
 
-    log(f"resumen: {ok}/{len(STATS)} ejecuciones correctas; registros en {RUN_DIR}")
+    log(f"summary: {ok}/{len(STATS)} successful runs; records in {RUN_DIR}")
     if STATS:
-        log(f"  telemetría: tiempo total {total_time}s | tiempo agentes {worker_time}s ({speedup}x aceleración) | tokens: {total_in:,} in / {total_out:,} out | coste est.: ${total_cost} USD")
+        log(f"  telemetry: total time {total_time}s | agent time {worker_time}s ({speedup}x speed-up) | tokens: {total_in:,} in / {total_out:,} out | est. cost: ${total_cost} USD")
     for s in STATS:
-        log(f"  agente {s['n']} «{s['role']}» {s['worker']}/{s['model']} {s['secs']}s {'OK' if s['ok'] else 'FALLÓ: ' + s.get('why', '')}")
+        log(f"  agent {s['n']} '{s['role']}' {s['worker']}/{s['model']} {s['secs']}s {'OK' if s['ok'] else 'FAILED: ' + s.get('why', '')}")
     for branch, folder, top in WORKTREES:
-        log(f"  COPIA {branch} en {folder} (fusión auto: auto_integrate(); manual: git -C {folder} diff HEAD | git -C {top} apply --3way)")
+        log(f"  COPY {branch} in {folder} (auto merge: auto_integrate(); manual: git -C {folder} diff HEAD | git -C {top} apply --3way)")
 
     try:
         (RUN_DIR / "telemetry.json").write_text(json.dumps({
@@ -767,7 +769,7 @@ def run_script(path: str, args: dict) -> int:
         asyncio.run(go())
         return 0
     except BaseException as ex:
-        log(f"EL WORKFLOW FALLÓ: {type(ex).__name__}: {ex}")
+        log(f"THE WORKFLOW FAILED: {type(ex).__name__}: {ex}")
         return 1
     finally:
         summary()

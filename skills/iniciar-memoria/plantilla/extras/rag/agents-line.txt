@@ -1,0 +1,1 @@
+- Automatic vault retrieval (local semantic search in `.rag/`): turned on with `.rag\prepare.ps1`. Once active, a hook adds to each message the most relevant chunks of the vault and of `docs/`, with file and lines: verify them in the source before using them. It is turned off with the variable `RAG_DISABLE=1`.

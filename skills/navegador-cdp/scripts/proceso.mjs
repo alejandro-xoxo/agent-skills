@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary — Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 // Copyright (c) 2026 alejandro-xoxo
-// Memoria de procesos repetitivos: crear un borrador, probarlo hasta que salga limpio, guardarlo, listarlo y reutilizarlo.
-// Uso: node proceso.mjs <comando> ...   (sin argumentos muestra la ayuda)
-// Regla central: "guardar" solo acepta un borrador cuyo ÚLTIMO intento terminó bien, con verificaciones, y con el
-// ejecutar.mjs exactamente igual al que se probó. No hay opción para saltarse esto.
+// Memory for repeatable processes: create a draft, test it until it runs clean, save it, list it and reuse it.
+// Usage: node proceso.mjs <command> ...   (with no arguments it shows the help)
+// Command names are Spanish (nuevo = new, probar = test, guardar = save, listar = list, ejecutar = run, reparar = repair, borrar = delete).
+// Core rule: "guardar" only accepts a draft whose LAST attempt finished well, with verifications, and with an
+// ejecutar.mjs exactly identical to the one that was tested. There is no option to skip this.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -16,22 +17,24 @@ const BORRADORES = path.join(RAIZ, 'borradores');
 const PROCESOS = path.join(RAIZ, 'procesos');
 const PLANTILLAS = path.join(RAIZ, 'plantillas');
 const BOOLEANAS = new Set(['json', 'confirmo', 'si']);
-const AYUDA = `Procesos repetitivos del navegador. Uso: node proceso.mjs <comando> ...
+const AYUDA = `Repeatable browser processes. Usage: node proceso.mjs <command> ...
+(Command names are Spanish; the English meaning is in parentheses.)
 
-Crear (borrador) y guardar
-  nuevo <nombre> "<descripcion>"      crea borradores/<nombre>/ con ejecutar.mjs y proceso.md
-  probar <nombre> [clave=valor ...] [--confirmo] [--puerto N] [--timeout seg]
-                                      ejecuta el borrador y anota el intento (pasos, verificaciones, error, captura)
-  guardar <nombre>                    lo pasa a la memoria SOLO si el último intento salió limpio (ver reglas)
-Usar lo guardado
-  listar [--json]                     procesos guardados (con su estado) y borradores en construcción
-  ver <nombre>                        muestra proceso.md
-  ejecutar <nombre> [clave=valor ...] [--confirmo] [--puerto N] [--timeout seg]
-  reparar <nombre>                    copia un proceso guardado a borradores/ para corregirlo y volver a guardarlo
-  borrar <nombre> --si                elimina un proceso guardado
-Los parámetros pueden ir como clave=valor, o con --params '{"clave":"valor"}', o con --params-archivo ruta.json.`;
+Create (draft) and save
+  nuevo (new) <name> "<description>"   creates borradores/<name>/ (drafts) with ejecutar.mjs and proceso.md
+  probar (test) <name> [key=value ...] [--confirmo] [--puerto N] [--timeout sec]
+                                      runs the draft and records the attempt (steps, verifications, error, screenshot)
+  guardar (save) <name>               moves it into memory ONLY if the last attempt ran clean (see rules)
+Use what is saved
+  listar (list) [--json]              saved processes (with their status) and drafts under construction
+  ver (show) <name>                   prints proceso.md
+  ejecutar (run) <name> [key=value ...] [--confirmo] [--puerto N] [--timeout sec]
+  reparar (repair) <name>             copies a saved process into borradores/ to fix it and save it again
+  borrar (delete) <name> --si         deletes a saved process (--si = yes, confirms)
+(--confirmo = the user confirms the irreversible steps.)
+Parameters can be given as key=value, or with --params '{"key":"value"}', or with --params-archivo path.json.`;
 
-// ---------- utilidades ----------
+// ---------- utilities ----------
 function parsear(argv) {
   const pos = [], f = {};
   for (let i = 0; i < argv.length; i++) {
@@ -47,10 +50,16 @@ const fail = m => { throw new Error(m); };
 const hoy = () => new Date().toISOString().slice(0, 10);
 const ahora = () => new Date().toISOString();
 const hashDe = ruta => crypto.createHash('sha256').update(fs.readFileSync(ruta)).digest('hex').slice(0, 12);
-const validarNombre = n => { if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(n || '')) fail('El nombre debe tener 2 a 41 caracteres: minúsculas, números y guiones (ej. descargar-extracto).'); };
+const validarNombre = n => { if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(n || '')) fail('The name must be 2 to 41 characters: lowercase letters, digits and hyphens (e.g. download-statement).'); };
 const jsonl = ruta => fs.existsSync(ruta) ? fs.readFileSync(ruta, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l)) : [];
 const anexar = (ruta, obj) => fs.appendFileSync(ruta, JSON.stringify(obj) + '\n');
 const seg = ms => (ms / 1000).toFixed(1) + ' s';
+
+// Section heading that the tool writes at the end of proceso.md. The Spanish form is also recognized, for files written by earlier versions.
+const TITULO_HISTORIAL = 'Build history (automatic)';
+const RE_HISTORIAL = /\n## (?:Build history \(automatic\)|Historial de construcción \(automático\))[\s\S]*?(?=\n## |$)/;
+// Placeholder that proceso.md must not contain when saving (the Spanish form is also recognized).
+const PENDIENTE = ['(complete)', '(completar)'];
 
 function leerFm(ruta) {
   const t = fs.readFileSync(ruta, 'utf8');
@@ -71,17 +80,17 @@ function ponerFm(texto, clave, valor) {
 function leerParams(f, extras) {
   let p = {};
   if (f['params-archivo']) p = JSON.parse(fs.readFileSync(f['params-archivo'], 'utf8'));
-  else if (f.params) { try { p = JSON.parse(f.params); } catch { fail('--params no es JSON válido. En PowerShell es más fácil usar clave=valor o --params-archivo.'); } }
+  else if (f.params) { try { p = JSON.parse(f.params); } catch { fail('--params is not valid JSON. In PowerShell it is easier to use key=value or --params-archivo.'); } }
   for (const e of extras) {
     const m = e.match(/^([\w-]+)=([\s\S]*)$/);
-    if (!m) fail(`Argumento no reconocido: "${e}". Los parámetros van como clave=valor.`);
+    if (!m) fail(`Unrecognized argument: "${e}". Parameters are given as key=value.`);
     p[m[1]] = m[2];
   }
   return p;
 }
 
-// Bloqueo con archivo: varias ejecuciones en paralelo del mismo proceso actualizan estado.json sin pisarse.
-// Si un bloqueo quedó huérfano (un proceso murió a mitad), a los 3 s se descarta y se sigue.
+// File lock: several parallel runs of the same process update estado.json without overwriting each other.
+// If a lock was left orphaned (a process died midway), after 3 s it is discarded and we carry on.
 async function conBloqueo(ruta, fn) {
   const lock = ruta + '.lock';
   const fin = Date.now() + 3000;
@@ -96,9 +105,9 @@ async function conBloqueo(ruta, fn) {
   try { return fn(); } finally { fs.closeSync(fd); fs.rmSync(lock, { force: true }); }
 }
 
-// Ejecuta ejecutar.mjs de una carpeta y devuelve el RESULTADO que imprime motor.mjs.
+// Runs the ejecutar.mjs of a folder and returns the RESULTADO (= RESULT) line that motor.mjs prints.
 async function correr(dir, { params, confirmo, puerto, timeoutSeg }) {
-  if (!(await responde(puerto))) fail(`No hay navegador con depuración en el puerto ${puerto}. Ábrelo con: node nav.mjs abrir${puerto !== 9222 ? ' --puerto ' + puerto : ''}   (si el sitio pide sesión, inicia sesión tú en esa ventana).`);
+  if (!(await responde(puerto))) fail(`No browser with debugging on port ${puerto}. Open one with: node nav.mjs abrir${puerto !== 9222 ? ' --puerto ' + puerto : ''}   (if the site asks you to sign in, sign in yourself in that window).`);
   const t0 = Date.now();
   const r = spawnSync(process.execPath, [path.join(dir, 'ejecutar.mjs')], {
     cwd: dir, encoding: 'utf8', timeout: timeoutSeg * 1000, maxBuffer: 20 * 1024 * 1024,
@@ -107,10 +116,10 @@ async function correr(dir, { params, confirmo, puerto, timeoutSeg }) {
   const lineas = (r.stdout || '').split('\n');
   const idx = lineas.map(l => l.startsWith('RESULTADO ')).lastIndexOf(true);
   let res;
-  if (idx >= 0) { try { res = JSON.parse(lineas[idx].slice(10)); } catch { /* se trata abajo */ } }
+  if (idx >= 0) { try { res = JSON.parse(lineas[idx].slice(10)); } catch { /* handled below */ } }
   const salida = lineas.filter((l, i) => i !== idx && l.trim()).slice(-15);
   if (!res) {
-    const causa = r.error?.code === 'ETIMEDOUT' ? `Se agotó el tiempo (${timeoutSeg} s)` : ((r.stderr || '').trim().split('\n').slice(-6).join('\n') || 'El script terminó sin imprimir RESULTADO');
+    const causa = r.error?.code === 'ETIMEDOUT' ? `Timed out (${timeoutSeg} s)` : ((r.stderr || '').trim().split('\n').slice(-6).join('\n') || 'The script ended without printing RESULTADO');
     res = { estado: 'error', pasos: [], verificaciones: [], irreversibles: [], error: causa, ms: Date.now() - t0 };
   }
   res.salida = salida;
@@ -120,69 +129,70 @@ async function correr(dir, { params, confirmo, puerto, timeoutSeg }) {
 function imprimir(res, etiqueta) {
   const pasosOk = res.pasos.filter(p => p.ok).length;
   const verOk = res.verificaciones.filter(v => v.ok).length;
-  console.log(`${etiqueta} | ${res.estado.toUpperCase()} | pasos ${pasosOk}/${res.pasos.length} | verificaciones ${verOk}/${res.verificaciones.length} | ${seg(res.ms)}`);
+  console.log(`${etiqueta} | ${res.estado.toUpperCase()} | steps ${pasosOk}/${res.pasos.length} | verifications ${verOk}/${res.verificaciones.length} | ${seg(res.ms)}`);
   const mal = res.pasos.find(p => !p.ok);
-  if (res.estado === 'necesita_confirmacion') console.log(`  detenido antes de un paso irreversible${mal ? ` (en "${mal.titulo}")` : ''}: ${(res.error || '').replace('Paso irreversible: ', '')}`);
-  else if (mal) console.log(`  paso fallido: "${mal.titulo}" -> ${mal.error}`);
+  if (res.estado === 'necesita_confirmacion') console.log(`  stopped before an irreversible step${mal ? ` (in "${mal.titulo}")` : ''}: ${(res.error || '').replace(/^(Irreversible step|Paso irreversible): /, '')}`);
+  else if (mal) console.log(`  failed step: "${mal.titulo}" -> ${mal.error}`);
   else if (res.error) console.log(`  ${res.error}`);
   if (res.url) console.log(`  url: ${res.url}`);
-  if (res.captura) console.log(`  captura: ${res.captura}`);
-  if (res.texto) console.log(`  texto de la página: "${res.texto}"`);
-  if (res.salida?.length) console.log('  salida del script:\n    ' + res.salida.join('\n    '));
+  if (res.captura) console.log(`  screenshot: ${res.captura}`);
+  if (res.texto) console.log(`  page text: "${res.texto}"`);
+  if (res.salida?.length) console.log('  script output:\n    ' + res.salida.join('\n    '));
 }
 
-// ---------- comandos ----------
+// ---------- commands ----------
 function nuevo(nombre, descripcion) {
   validarNombre(nombre);
-  if (!descripcion) fail('Falta la descripción. Uso: nuevo <nombre> "<descripcion>"');
-  if (fs.existsSync(path.join(PROCESOS, nombre))) fail(`Ya existe un proceso guardado "${nombre}". Para corregirlo usa: reparar ${nombre}`);
+  if (!descripcion) fail('Missing description. Usage: nuevo <name> "<description>"');
+  if (fs.existsSync(path.join(PROCESOS, nombre))) fail(`A saved process "${nombre}" already exists. To fix it use: reparar ${nombre}`);
   const dir = path.join(BORRADORES, nombre);
-  if (fs.existsSync(dir)) fail(`Ya existe el borrador "${nombre}" en ${dir}`);
+  if (fs.existsSync(dir)) fail(`The draft "${nombre}" already exists at ${dir}`);
   fs.mkdirSync(dir, { recursive: true });
   const desc = descripcion.replace(/\r?\n/g, ' ');
   const llenar = t => t.replaceAll('__NOMBRE__', () => nombre).replaceAll('__DESCRIPCION__', () => desc).replaceAll('__FECHA__', () => hoy());
   fs.writeFileSync(path.join(dir, 'ejecutar.mjs'), llenar(fs.readFileSync(path.join(PLANTILLAS, 'ejecutar.plantilla.mjs'), 'utf8')));
   fs.writeFileSync(path.join(dir, 'proceso.md'), llenar(fs.readFileSync(path.join(PLANTILLAS, 'proceso.plantilla.md'), 'utf8')));
-  console.log(`Borrador creado en ${dir}\n  1. Escribe los pasos en ejecutar.mjs y rellena proceso.md (quita todos los "(completar)").\n  2. node proceso.mjs probar ${nombre}   (repite hasta que salga OK)\n  3. node proceso.mjs guardar ${nombre}`);
+  console.log(`Draft created at ${dir}\n  1. Write the steps in ejecutar.mjs and fill in proceso.md (remove every "(complete)").\n  2. node proceso.mjs probar ${nombre}   (repeat until it prints OK)\n  3. node proceso.mjs guardar ${nombre}`);
 }
 
 async function probar(nombre, extras, f) {
   validarNombre(nombre);
   const dir = path.join(BORRADORES, nombre);
-  if (!fs.existsSync(dir)) fail(`No existe el borrador "${nombre}". Créalo con: nuevo ${nombre} "<descripcion>"`);
+  if (!fs.existsSync(dir)) fail(`The draft "${nombre}" does not exist. Create it with: nuevo ${nombre} "<description>"`);
   const params = leerParams(f, extras);
   const res = await correr(dir, { params, confirmo: !!f.confirmo, puerto: Number(f.puerto || process.env.NAV_PUERTO || 9222), timeoutSeg: Number(f.timeout || 300) });
   const archivo = path.join(dir, 'intentos.jsonl');
   const n = jsonl(archivo).length + 1;
-  // En el historial solo se guardan los NOMBRES de los parámetros y la URL sin consulta: los valores pueden ser datos sensibles.
+  // The history only stores the parameter NAMES and the URL without its query string: the values may be sensitive data.
   anexar(archivo, { n, fecha: ahora(), hash: hashDe(path.join(dir, 'ejecutar.mjs')), estado: res.estado, ok: res.estado === 'ok', pasos: res.pasos, verificaciones: res.verificaciones.length, irreversibles: res.irreversibles, error: res.error, url: res.url?.split('?')[0], ms: res.ms, parametros: Object.keys(params) });
-  imprimir(res, `intento ${n}`);
-  if (res.estado === 'ok') console.log(`  Listo para guardar: node proceso.mjs guardar ${nombre}`);
-  if (res.estado === 'necesita_confirmacion') console.log('  Pregunta al usuario si autoriza ese paso. Si dice que sí, repite con --confirmo.');
+  imprimir(res, `attempt ${n}`);
+  if (res.estado === 'ok') console.log(`  Ready to save: node proceso.mjs guardar ${nombre}`);
+  if (res.estado === 'necesita_confirmacion') console.log('  Ask the user whether they authorize that step. If they say yes, repeat with --confirmo.');
   process.exitCode = res.estado === 'ok' ? 0 : 1;
 }
 
 function comprobarGuardable(nombre) {
   const dir = path.join(BORRADORES, nombre);
-  if (!fs.existsSync(dir)) return { ok: false, motivos: [`No existe el borrador "${nombre}".`] };
+  if (!fs.existsSync(dir)) return { ok: false, motivos: [`The draft "${nombre}" does not exist.`] };
   const intentos = jsonl(path.join(dir, 'intentos.jsonl'));
   const ult = intentos[intentos.length - 1];
   const h = hashDe(path.join(dir, 'ejecutar.mjs'));
   const motivos = [];
-  if (!ult) motivos.push(`Todavía no hay ningún intento. Ejecuta: node proceso.mjs probar ${nombre}`);
+  if (!ult) motivos.push(`There is no attempt yet. Run: node proceso.mjs probar ${nombre}`);
   else {
-    if (ult.hash !== h) motivos.push('ejecutar.mjs cambió después del último intento. Vuelve a probarlo: lo que se guarda debe ser exactamente lo que se probó.');
-    if (ult.estado !== 'ok') motivos.push(`El último intento terminó en "${ult.estado}"${ult.error ? ': ' + ult.error.replace(/\.+$/, '') : ''}.`);
-    else if (!(ult.verificaciones >= 1)) motivos.push('El último intento no tiene verificaciones.');
+    if (ult.hash !== h) motivos.push('ejecutar.mjs changed after the last attempt. Test it again: what gets saved must be exactly what was tested.');
+    if (ult.estado !== 'ok') motivos.push(`The last attempt ended in "${ult.estado}"${ult.error ? ': ' + ult.error.replace(/\.+$/, '') : ''}.`);
+    else if (!(ult.verificaciones >= 1)) motivos.push('The last attempt has no verifications.');
   }
-  if (fs.readFileSync(path.join(dir, 'proceso.md'), 'utf8').includes('(completar)')) motivos.push('proceso.md todavía tiene "(completar)": describe parámetros, pasos y cómo se verifica el resultado.');
+  const md = fs.readFileSync(path.join(dir, 'proceso.md'), 'utf8');
+  if (PENDIENTE.some(p => md.includes(p))) motivos.push('proceso.md still has "(complete)": describe the parameters, the steps and how the result is verified.');
   return { ok: motivos.length === 0, motivos, intentos, hash: h };
 }
 
 function guardar(nombre) {
   validarNombre(nombre);
   const g = comprobarGuardable(nombre);
-  if (!g.ok) { console.error(`NO se guardó "${nombre}":\n` + g.motivos.map(m => '  - ' + m).join('\n')); process.exitCode = 1; return; }
+  if (!g.ok) { console.error(`"${nombre}" was NOT saved:\n` + g.motivos.map(m => '  - ' + m).join('\n')); process.exitCode = 1; return; }
   const origen = path.join(BORRADORES, nombre);
   const destino = path.join(PROCESOS, nombre);
   const existia = fs.existsSync(destino);
@@ -196,22 +206,22 @@ function guardar(nombre) {
   const ult = g.intentos[g.intentos.length - 1];
   const fallidos = g.intentos.filter(i => !i.ok);
   for (const i of g.intentos) anexar(path.join(destino, 'historial.jsonl'), { ...i, origen: 'construccion' });
-  // Los errores se acumulan entre versiones: son la parte más útil de la memoria (qué falló y se resolvió).
+  // Errors accumulate across versions: they are the most useful part of the memory (what failed and was solved).
   const errores = [...new Set(jsonl(path.join(destino, 'historial.jsonl'))
     .filter(h => h.estado === 'error' || h.estado === 'sin_verificaciones').map(h => h.error).filter(Boolean))];
-  let md = fs.readFileSync(path.join(origen, 'proceso.md'), 'utf8').replace(/\n## Historial de construcción \(automático\)[\s\S]*?(?=\n## |$)/, '');
+  let md = fs.readFileSync(path.join(origen, 'proceso.md'), 'utf8').replace(RE_HISTORIAL, '');
   md = ponerFm(md, 'guardado', hoy());
   md = ponerFm(md, 'hash', g.hash);
-  md = md.trimEnd() + `\n\n## Historial de construcción (automático)\n- Última versión guardada el ${hoy()} tras ${g.intentos.length} intento(s), ${fallidos.length} fallido(s).\n` +
-    (errores.length ? '- Errores que se han encontrado en este proceso (construcción y uso):\n' + errores.map(e => `  - ${e}`).join('\n') + '\n' : '- No ha habido errores hasta ahora.\n') +
-    `- Último intento (correcto): ${ult.pasos.length} pasos, ${ult.verificaciones} verificaciones, ${seg(ult.ms)}.\n`;
+  md = md.trimEnd() + `\n\n## ${TITULO_HISTORIAL}\n- Latest version saved on ${hoy()} after ${g.intentos.length} attempt(s), ${fallidos.length} failed.\n` +
+    (errores.length ? '- Errors found in this process (while building and while using it):\n' + errores.map(e => `  - ${e}`).join('\n') + '\n' : '- No errors so far.\n') +
+    `- Last attempt (successful): ${ult.pasos.length} steps, ${ult.verificaciones} verifications, ${seg(ult.ms)}.\n`;
   fs.writeFileSync(path.join(destino, 'proceso.md'), md);
   const rutaEstado = path.join(destino, 'estado.json');
   const estado = fs.existsSync(rutaEstado) ? JSON.parse(fs.readFileSync(rutaEstado, 'utf8')) : { ejecuciones_ok: 0, ejecuciones_fallidas: 0, ultima: null };
-  estado.roto = false; // la versión nueva acaba de pasar la compuerta
+  estado.roto = false; // the new version has just passed the gate
   fs.writeFileSync(rutaEstado, JSON.stringify(estado, null, 1));
   fs.rmSync(origen, { recursive: true, force: true });
-  console.log(`Guardado "${nombre}" ${existia ? '(versión nueva; la anterior quedó en versiones/) ' : ''}en ${destino}\n  hash ${g.hash} · ${g.intentos.length} intento(s) · ${fallidos.length} fallido(s)\n  Reutilízalo con: node proceso.mjs ejecutar ${nombre}`);
+  console.log(`Saved "${nombre}" ${existia ? '(new version; the previous one is in versiones/) ' : ''}at ${destino}\n  hash ${g.hash} · ${g.intentos.length} attempt(s) · ${fallidos.length} failed\n  Reuse it with: node proceso.mjs ejecutar ${nombre}`);
 }
 
 function listar(f) {
@@ -220,38 +230,38 @@ function listar(f) {
   const datos = guardados.map(n => {
     const fm = leerFm(path.join(PROCESOS, n, 'proceso.md'));
     const est = JSON.parse(fs.readFileSync(path.join(PROCESOS, n, 'estado.json'), 'utf8'));
-    return { nombre: n, descripcion: fm.descripcion, parametros: fm.parametros || 'ninguno', sitio: fm.sitio, sesion: fm.sesion, guardado: fm.guardado, ...est };
+    return { nombre: n, descripcion: fm.descripcion, parametros: fm.parametros || 'none', sitio: fm.sitio, sesion: fm.sesion, guardado: fm.guardado, ...est };
   });
   const enConstruccion = borradores.map(n => {
     const it = jsonl(path.join(BORRADORES, n, 'intentos.jsonl'));
-    return { nombre: n, intentos: it.length, ultimo: it.length ? it[it.length - 1].estado : 'sin probar', descripcion: leerFm(path.join(BORRADORES, n, 'proceso.md')).descripcion };
+    return { nombre: n, intentos: it.length, ultimo: it.length ? it[it.length - 1].estado : 'untested', descripcion: leerFm(path.join(BORRADORES, n, 'proceso.md')).descripcion };
   });
   if (f.json) { console.log(JSON.stringify({ guardados: datos, en_construccion: enConstruccion }, null, 1)); return; }
-  console.log(`PROCESOS GUARDADOS (${datos.length})`);
-  if (!datos.length) console.log('  (ninguno todavía; crea uno con: nuevo <nombre> "<descripcion>")');
+  console.log(`SAVED PROCESSES (${datos.length})`);
+  if (!datos.length) console.log('  (none yet; create one with: nuevo <name> "<description>")');
   for (const d of datos) {
-    const marca = d.roto ? 'ROTO' : d.ejecuciones_ok + d.ejecuciones_fallidas === 0 ? 'sin usar' : 'ok';
-    console.log(`- ${d.nombre}  [${marca}]  ${d.ejecuciones_ok} ok / ${d.ejecuciones_fallidas} fallos · última: ${d.ultima ? d.ultima.fecha.slice(0, 10) + ' ' + d.ultima.estado : 'nunca'}`);
+    const marca = d.roto ? 'BROKEN' : d.ejecuciones_ok + d.ejecuciones_fallidas === 0 ? 'unused' : 'ok';
+    console.log(`- ${d.nombre}  [${marca}]  ${d.ejecuciones_ok} ok / ${d.ejecuciones_fallidas} failed · last: ${d.ultima ? d.ultima.fecha.slice(0, 10) + ' ' + d.ultima.estado : 'never'}`);
     console.log(`    ${d.descripcion}`);
-    console.log(`    parámetros: ${d.parametros} · sitio: ${d.sitio || '-'} · sesión: ${d.sesion || '-'}`);
+    console.log(`    parameters: ${d.parametros} · site: ${d.sitio || '-'} · session: ${d.sesion || '-'}`);
   }
   if (enConstruccion.length) {
-    console.log(`\nEN CONSTRUCCIÓN (${enConstruccion.length})`);
-    for (const b of enConstruccion) console.log(`- ${b.nombre}  ${b.intentos} intento(s) · último: ${b.ultimo}  — ${b.descripcion}`);
+    console.log(`\nUNDER CONSTRUCTION (${enConstruccion.length})`);
+    for (const b of enConstruccion) console.log(`- ${b.nombre}  ${b.intentos} attempt(s) · last: ${b.ultimo}  — ${b.descripcion}`);
   }
 }
 
 function ver(nombre) {
   validarNombre(nombre);
   const ruta = [path.join(PROCESOS, nombre, 'proceso.md'), path.join(BORRADORES, nombre, 'proceso.md')].find(fs.existsSync);
-  if (!ruta) fail(`No existe "${nombre}" ni guardado ni como borrador.`);
+  if (!ruta) fail(`"${nombre}" exists neither as a saved process nor as a draft.`);
   console.log(`(${ruta})\n`); console.log(fs.readFileSync(ruta, 'utf8'));
 }
 
 async function ejecutar(nombre, extras, f) {
   validarNombre(nombre);
   const dir = path.join(PROCESOS, nombre);
-  if (!fs.existsSync(dir)) fail(`No hay un proceso guardado "${nombre}". Mira los que hay con: listar`);
+  if (!fs.existsSync(dir)) fail(`There is no saved process "${nombre}". See the existing ones with: listar`);
   const params = leerParams(f, extras);
   const res = await correr(dir, { params, confirmo: !!f.confirmo, puerto: Number(f.puerto || process.env.NAV_PUERTO || 9222), timeoutSeg: Number(f.timeout || 300) });
   const ruta = path.join(dir, 'estado.json');
@@ -264,33 +274,33 @@ async function ejecutar(nombre, extras, f) {
   });
   anexar(path.join(dir, 'historial.jsonl'), { fecha: ahora(), origen: 'uso', estado: res.estado, ms: res.ms, error: res.error, parametros: Object.keys(params) });
   imprimir(res, nombre);
-  if (res.estado === 'necesita_confirmacion') console.log('  Pregunta al usuario si autoriza ese paso. Si dice que sí, repite con --confirmo.');
-  if (res.estado !== 'ok' && res.estado !== 'necesita_confirmacion') console.log(`  El proceso falló. Para corregirlo: node proceso.mjs reparar ${nombre}`);
+  if (res.estado === 'necesita_confirmacion') console.log('  Ask the user whether they authorize that step. If they say yes, repeat with --confirmo.');
+  if (res.estado !== 'ok' && res.estado !== 'necesita_confirmacion') console.log(`  The process failed. To fix it: node proceso.mjs reparar ${nombre}`);
   process.exitCode = res.estado === 'ok' ? 0 : 1;
 }
 
 function reparar(nombre) {
   validarNombre(nombre);
   const origen = path.join(PROCESOS, nombre);
-  if (!fs.existsSync(origen)) fail(`No hay un proceso guardado "${nombre}".`);
+  if (!fs.existsSync(origen)) fail(`There is no saved process "${nombre}".`);
   const dir = path.join(BORRADORES, nombre);
-  if (fs.existsSync(dir)) fail(`Ya hay un borrador "${nombre}". Termínalo o bórralo antes.`);
+  if (fs.existsSync(dir)) fail(`A draft "${nombre}" already exists. Finish it or delete it first.`);
   fs.mkdirSync(dir, { recursive: true });
   fs.copyFileSync(path.join(origen, 'ejecutar.mjs'), path.join(dir, 'ejecutar.mjs'));
   fs.copyFileSync(path.join(origen, 'proceso.md'), path.join(dir, 'proceso.md'));
-  console.log(`Copiado a ${dir}. El guardado sigue intacto hasta que "guardar" acepte la corrección.\n  Corrige ejecutar.mjs, repite: probar ${nombre} (hasta OK) y luego: guardar ${nombre}`);
+  console.log(`Copied to ${dir}. The saved one stays untouched until "guardar" accepts the fix.\n  Fix ejecutar.mjs, repeat: probar ${nombre} (until OK) and then: guardar ${nombre}`);
 }
 
 function borrar(nombre, f) {
   validarNombre(nombre);
   const dir = path.join(PROCESOS, nombre);
-  if (!fs.existsSync(dir)) fail(`No hay un proceso guardado "${nombre}".`);
-  if (!f.si) fail(`Esto elimina el proceso guardado "${nombre}" con su historial. Confírmalo repitiendo el comando con --si.`);
+  if (!fs.existsSync(dir)) fail(`There is no saved process "${nombre}".`);
+  if (!f.si) fail(`This deletes the saved process "${nombre}" together with its history. Confirm by repeating the command with --si.`);
   fs.rmSync(dir, { recursive: true, force: true });
-  console.log(`Eliminado "${nombre}".`);
+  console.log(`Deleted "${nombre}".`);
 }
 
-// ---------- entrada ----------
+// ---------- entry point ----------
 try {
   const { pos, f } = parsear(process.argv.slice(2));
   const [cmd, nombre, ...resto] = pos;
@@ -303,7 +313,7 @@ try {
   else if (cmd === 'ejecutar') await ejecutar(nombre, resto, f);
   else if (cmd === 'reparar') reparar(nombre);
   else if (cmd === 'borrar') borrar(nombre, f);
-  else { console.error(`Comando desconocido: ${cmd}\n`); console.error(AYUDA); process.exitCode = 1; }
+  else { console.error(`Unknown command: ${cmd}\n`); console.error(AYUDA); process.exitCode = 1; }
 } catch (e) {
   console.error('ERROR:', e.message);
   process.exitCode = 1;

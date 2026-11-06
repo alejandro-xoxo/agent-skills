@@ -1,102 +1,123 @@
 ---
 name: navegador-cdp
-description: Maneja Chrome o Edge sin extensiones (por CDP, con Node) para hacer cosas puntuales en una web y para crear, guardar y reutilizar procesos repetitivos del navegador. Un proceso nuevo solo se guarda en la memoria de la skill cuando el agente lo ejecuta de principio a fin sin errores y con el resultado verificado. Úsala siempre que el usuario pida abrir una web y hacer algo en ella, automatizar un proceso en el navegador, "crear un proceso", "ejecutar el proceso X", "listar mis procesos" o "qué procesos tengo", o cuando no haya una extensión de navegador disponible o el usuario no quiera depender de extensiones. Funciona con cualquier agente que pueda ejecutar comandos de shell.
+description: Drives Chrome or Edge without extensions (over CDP, with Node) to do one-off tasks on a website and to create, save and reuse repeatable browser processes. A new process is only saved to the skill's memory when the agent has run it from start to finish with no errors and a verified result. Use it whenever the user asks to open a website and do something on it, to automate a process in the browser, to "create a process", "run the process X", "list my processes" or "what processes do I have", or when no browser extension is available or the user does not want to depend on extensions. Works with any agent that can run shell commands.
 ---
 
-# Navegador sin extensiones, con memoria de procesos
+# Browser without extensions, with process memory
 
-Controla un Chrome o un Edge por el protocolo de depuración (CDP), con scripts de Node sin dependencias. No necesita extensiones, solo un navegador y Node 22 o superior. La skill tiene dos partes:
+Controls a Chrome or Edge browser through the debugging protocol (CDP), with Node scripts that have no dependencies. It needs no extensions, only a browser and Node 22 or later. The skill has two parts:
 
-1. **Tareas puntuales**: abrir una web, leer, hacer clic, escribir, subir archivos, tomar capturas (`scripts/nav.mjs`).
-2. **Memoria de procesos**: un proceso repetitivo se construye, se prueba hasta que sale limpio y solo entonces se guarda, para reutilizarlo después con un comando (`scripts/proceso.mjs`).
+1. **One-off tasks**: open a website, read, click, type, upload files, take screenshots (`scripts/nav.mjs`).
+2. **Process memory**: a repeatable process is built, tested until it runs clean and only then saved, so it can be reused later with one command (`scripts/proceso.mjs`).
 
-Para todos los comandos de abajo, `S` es la carpeta `scripts/` de esta skill, allí donde esté instalada y se ejecutan con `node $S/nav.mjs ...` o `node $S/proceso.mjs ...`. Si necesitas la API completa o las trampas conocidas, lee `referencia.md`.
+In every command below, `S` is the `scripts/` folder of this skill, wherever it is installed, and commands are run as `node $S/nav.mjs ...` or `node $S/proceso.mjs ...`. If you need the full API or the known pitfalls, read `referencia.md`.
 
-## Por qué funciona así
-- El navegador que se abre es **una ventana aparte** con su propio perfil. No toca el navegador normal del usuario, sus pestañas ni sus sesiones. Por eso el usuario **inicia sesión a mano** cuando un sitio lo pide; nunca se piden ni se guardan contraseñas.
-- Sin `--perfil`, el perfil es temporal y se borra al cerrar. Con `--perfil <nombre>` la sesión se conserva entre usos (útil para procesos que repiten un inicio de sesión), guardada fuera de esta carpeta en `%LOCALAPPDATA%\navegador-cdp\perfiles\`.
-- Un proceso guardado no es "lo que el agente recuerda": es un script (`ejecutar.mjs`) más su ficha (`proceso.md`), que cualquier agente puede leer y ejecutar.
+**Command names are Spanish** (the skill was written in Spanish first). This table is the translation; keep using the Spanish names when you run them:
 
-## Comandos del usuario
-Cuando el usuario invoque la skill con argumentos o lo pida con otras palabras, interprétalo así:
+| `nav.mjs` command | Meaning | | `proceso.mjs` command | Meaning |
+|---|---|---|---|---|
+| `abrir` | open a browser | | `nuevo` | create a draft |
+| `estado` | status of opened browsers | | `probar` | test a draft |
+| `cerrar` | close the browser | | `guardar` | save a draft into memory |
+| `pestanas` / `nueva` / `cerrar-pestana` | list / create / close tabs | | `listar` | list processes |
+| `ir` | go to a URL | | `ver` | show a process sheet |
+| `leer` | read text | | `ejecutar` | run a saved process |
+| `esperar` | wait for an element | | `reparar` | copy a saved process back to a draft to fix it |
+| `clic` | click | | `borrar` | delete a saved process |
+| `escribir` | type into a field | | | |
+| `seleccionar` | pick an option of a `<select>` | | | |
+| `tecla` | press a key | | | |
+| `subir` | upload files | | | |
+| `captura` | screenshot | | | |
+| `titulo` / `url` / `html` / `eval` | title / URL / HTML / run JavaScript | | | |
 
-| Dice | Haz |
+Useful flags: `--puerto` (port), `--perfil` (profile name), `--navegador` (edge or chrome), `--tab` (tab id), `--confirmo` (the user confirmed the irreversible steps), `--borrar-perfil` (delete the profile on close).
+
+## Why it works this way
+- The browser that gets opened is **a separate window** with its own profile. It does not touch the user's normal browser, tabs or sessions. That is why the user **signs in by hand** when a site asks for it; passwords are never requested or stored.
+- Without `--perfil`, the profile is temporary and is deleted on close. With `--perfil <name>` the session is kept between uses (useful for processes that would otherwise repeat a login), stored outside this folder in `%LOCALAPPDATA%\navegador-cdp\perfiles\`.
+- A saved process is not "what the agent remembers": it is a script (`ejecutar.mjs`) plus its sheet (`proceso.md`), which any agent can read and run.
+
+## User commands
+When the user invokes the skill with arguments or asks for the same thing in other words, interpret it like this:
+
+| User says | Do |
 |---|---|
-| `crear <nombre> <explicación del proceso>` | Sigue el bucle de creación de abajo |
-| `listar` (o "qué procesos tengo") | `node $S/proceso.mjs listar` y resume el resultado |
-| `ejecutar <nombre> [clave=valor ...]` | Sigue "Usar un proceso guardado" |
-| `ver <nombre>` | `node $S/proceso.mjs ver <nombre>` |
-| `reparar <nombre>` | `reparar` y luego el bucle desde el paso 4 |
-| `borrar <nombre>` | Confirma con el usuario y ejecuta `borrar <nombre> --si` |
-| cualquier otra petición sobre una web | Tarea puntual (siguiente sección) |
+| `create <name> <explanation of the process>` | Follow the creation loop below |
+| `list` (or "what processes do I have") | `node $S/proceso.mjs listar` and summarize the result |
+| `run <name> [key=value ...]` | Follow "Use a saved process" |
+| `show <name>` | `node $S/proceso.mjs ver <name>` |
+| `repair <name>` | `reparar`, then the loop from step 4 |
+| `delete <name>` | Confirm with the user, then run `borrar <name> --si` |
+| any other request about a website | One-off task (next section) |
 
-## Tareas puntuales
-1. `node $S/nav.mjs abrir [--url U] [--perfil nombre]` (añade `--headless` si no hace falta que el usuario vea la ventana). Si el sitio pide sesión, pide al usuario que inicie sesión en esa ventana y espera.
-2. Trabaja con `ir`, `leer`, `esperar`, `clic`, `escribir`, `seleccionar`, `tecla`, `subir`, `eval`, `captura`. `node $S/nav.mjs ayuda` lista todo. Un objetivo es un selector CSS, `texto=Guardar` (elemento visible con ese texto) o coordenadas `x,y`.
-3. Prefiere **leer texto y el DOM** (`leer`, `eval`) a mirar capturas: es más barato y no depende de que el agente vea imágenes. Usa `captura` cuando haga falta ver algo visual.
-4. Espera antes de leer lo que carga tarde (`esperar`), y comprueba el resultado de cada acción antes de seguir (por ejemplo, `leer` el mensaje de confirmación).
-5. Al terminar, `cerrar` si el navegador era temporal. Si había una sesión que el usuario quiere conservar, déjala abierta o usa un perfil con nombre.
+## One-off tasks
+1. `node $S/nav.mjs abrir [--url U] [--perfil name]` (add `--headless` if the user does not need to see the window). If the site asks for a login, ask the user to sign in in that window and wait.
+2. Work with `ir`, `leer`, `esperar`, `clic`, `escribir`, `seleccionar`, `tecla`, `subir`, `eval`, `captura`. `node $S/nav.mjs ayuda` lists everything. A target is a CSS selector, `texto=Save` (visible element with that text) or `x,y` coordinates.
+3. Prefer **reading text and the DOM** (`leer`, `eval`) over looking at screenshots: it is cheaper and does not depend on the agent being able to see images. Use `captura` when you need to see something visual.
+4. Wait before reading anything that loads late (`esperar`), and check the result of every action before moving on (for example, `leer` the confirmation message).
+5. When done, `cerrar` if the browser was temporary. If there was a session the user wants to keep, leave it open or use a named profile.
 
-Si hay varias pestañas, indica cuál con `--tab <id>` (las lista `pestanas`). El puerto por defecto es 9222 y se cambia con `--puerto`, lo que permite tener varias ventanas a la vez, por ejemplo una por cuenta.
+If there are several tabs, say which one with `--tab <id>` (`pestanas` lists them). The default port is 9222 and it is changed with `--puerto`, which allows several windows at once, for example one per account.
 
-## Crear un proceso (bucle de creación)
-Idea central: **un proceso que no se ha visto funcionar de principio a fin no vale como memoria**, porque la siguiente vez fallaría y nadie sabría por qué. Por eso `guardar` rechaza cualquier borrador cuyo último intento no haya salido limpio, y no hay forma de saltarse eso. Tu trabajo es llegar a ese intento limpio de verdad, sin trucos.
+## Create a process (creation loop)
+Core idea: **a process that has not been seen working from start to finish is worthless as memory**, because the next time it would fail and nobody would know why. That is why `guardar` rejects any draft whose last attempt did not run clean, and there is no way around it. Your job is to reach that clean attempt for real, with no tricks.
 
-1. **Entender.** Reformula el proceso en pasos numerados y averigua solo lo que falte y bloquee: sitio, parámetros, si necesita sesión, qué demuestra que salió bien. Identifica **pasos irreversibles** (enviar, pagar, borrar, publicar). Si los hay, pregunta ya cómo probarlos sin daño (cuenta de prueba, modo de ensayo, otro destinatario), porque durante la construcción se repiten.
-2. **Preparar el navegador.** `abrir` (con `--perfil <nombre>` si hace falta sesión y quieres reutilizarla). El usuario inicia sesión a mano. Comprueba con `leer` o `url` que la sesión funciona.
-3. **Explorar a mano** con `nav.mjs` antes de escribir nada: `leer`, `eval` para listar campos y botones, `captura`. Elige selectores estables (id, name, aria-label, texto visible), no posiciones ni coordenadas, que cambian con el tamaño de la ventana.
-4. **Escribir el borrador.** `node $S/proceso.mjs nuevo <nombre> "<descripción>"` crea `borradores/<nombre>/ejecutar.mjs` y `proceso.md`. En `ejecutar.mjs` pon un `paso('título claro', ...)` por cada paso visible para el usuario, `esperar` después de navegar o pulsar, y al final **`verificar(condición, 'qué demuestra')` sobre el resultado real** (el texto de confirmación, el valor guardado, el archivo bajado), no solo "no hubo error". Sin ninguna verificación el intento cuenta como fallido.
-5. **Probar y corregir.** `node $S/proceso.mjs probar <nombre> [clave=valor ...]`. Si falla, la salida trae el paso fallido, el error, la URL, un resumen del texto de la página y la ruta de una captura (`ultimo-error.png`): míralos, encuentra la **causa real**, corrige y vuelve a probar. No debilites una verificación ni borres un paso para que "pase": eso guardaría un proceso que no hace lo que dice.
-6. **Si algo no se puede resolver** (captcha, verificación en dos pasos, un permiso que falta, un micrófono, o unos 8 intentos sin avanzar), detente. Cuéntale al usuario qué probaste y qué bloquea, y no guardes nada.
-7. **Pasos irreversibles.** Llama a `irreversible('qué va a pasar')` justo antes de cada uno. Sin confirmación el intento se detiene con `necesita_confirmacion`: pregunta al usuario y, solo si autoriza, repite con `--confirmo`. Cada ejecución confirmada repite la acción real, así que evita corregir el script después de una confirmada si no es imprescindible, y pide permiso otra vez si lo haces.
-8. **Completar `proceso.md`.** Quita todos los "(completar)": qué hace, parámetros con ejemplo, precondiciones, pasos, cómo se verifica, pasos irreversibles, trampas. `guardar` rechaza la ficha incompleta.
-9. **Guardar.** `node $S/proceso.mjs guardar <nombre>`. Comprueba que el último intento salió bien, que tiene verificaciones, que `ejecutar.mjs` es exactamente el que se probó y que la ficha está completa. Si rechaza, lee los motivos y corrígelos; nunca copies archivos a `procesos/` a mano ni edites `intentos.jsonl`.
-10. **Cerrar.** Dile al usuario qué se guardó, cómo ejecutarlo (`ejecutar <nombre> clave=valor`) y que se verificó contra el sitio tal como estaba hoy (si el sitio cambia, puede romperse). Cierra el navegador si era temporal.
+1. **Understand.** Restate the process as numbered steps and find out only what is missing and blocking: site, parameters, whether it needs a session, what proves it went well. Identify **irreversible steps** (send, pay, delete, publish). If there are any, ask right away how to test them harmlessly (test account, dry-run mode, another recipient), because they get repeated during construction.
+2. **Prepare the browser.** `abrir` (with `--perfil <name>` if a session is needed and you want to reuse it). The user signs in by hand. Check with `leer` or `url` that the session works.
+3. **Explore by hand** with `nav.mjs` before writing anything: `leer`, `eval` to list fields and buttons, `captura`. Choose stable selectors (id, name, aria-label, visible text), not positions or coordinates, which change with the window size.
+4. **Write the draft.** `node $S/proceso.mjs nuevo <name> "<description>"` creates `borradores/<name>/ejecutar.mjs` and `proceso.md`. In `ejecutar.mjs` put one `paso('clear title', ...)` for each user-visible step, `esperar` after navigating or clicking, and at the end **`verificar(condition, 'what it proves')` on the real result** (the confirmation text, the saved value, the downloaded file), not just "there was no error". With no verification at all, the attempt counts as failed.
+5. **Test and fix.** `node $S/proceso.mjs probar <name> [key=value ...]`. If it fails, the output shows the failed step, the error, the URL, a summary of the page text and the path of a screenshot (`ultimo-error.png`): look at them, find the **real cause**, fix it and test again. Do not weaken a verification or delete a step to make it "pass": that would save a process that does not do what it says.
+6. **If something cannot be solved** (captcha, two-step verification, a missing permission, a microphone, or about 8 attempts without progress), stop. Tell the user what you tried and what is blocking, and do not save anything.
+7. **Irreversible steps.** Call `irreversible('what is about to happen')` right before each one. Without confirmation the attempt stops with `necesita_confirmacion` (needs confirmation): ask the user and, only if they authorize, repeat with `--confirmo`. Every confirmed run repeats the real action, so avoid fixing the script after a confirmed run unless it is essential, and ask for permission again if you do.
+8. **Complete `proceso.md`.** Remove every "(complete)": what it does, parameters with an example, preconditions, steps, how it is verified, irreversible steps, pitfalls. `guardar` rejects an incomplete sheet. The front matter keys are Spanish because the tool reads them by name: `nombre` (name), `descripcion` (description), `sitio` (site), `sesion` (session), `parametros` (parameters), `creado` (created).
+9. **Save.** `node $S/proceso.mjs guardar <name>`. It checks that the last attempt went well, that it has verifications, that `ejecutar.mjs` is exactly the one that was tested and that the sheet is complete. If it rejects, read the reasons and fix them; never copy files into `procesos/` by hand or edit `intentos.jsonl`.
+10. **Wrap up.** Tell the user what was saved, how to run it (`ejecutar <name> key=value`) and that it was verified against the site as it was today (if the site changes, it may break). Close the browser if it was temporary.
 
-## Usar un proceso guardado
-1. `listar` y, si hace falta, `ver <nombre>` para conocer parámetros, precondiciones y pasos irreversibles.
-2. Abre el navegador con el perfil que pide la ficha. Si el proceso tiene pasos irreversibles, dile al usuario qué hará antes de ejecutarlo.
-3. `node $S/proceso.mjs ejecutar <nombre> [clave=valor ...]`.
-4. **OK**: cuenta el resultado. **Error**: el proceso queda marcado `ROTO` en `listar`; cuéntale al usuario qué falló y ofrece `reparar <nombre>`, que copia el proceso a `borradores/` y te lleva al paso 4 del bucle sin tocar la versión guardada hasta que la corrección salga limpia. **`necesita_confirmacion`**: pregunta al usuario y repite con `--confirmo` solo si autoriza.
+## Use a saved process
+1. `listar` and, if needed, `ver <name>` to learn the parameters, preconditions and irreversible steps.
+2. Open the browser with the profile the sheet asks for. If the process has irreversible steps, tell the user what it will do before running it.
+3. `node $S/proceso.mjs ejecutar <name> [key=value ...]`.
+4. **OK**: report the result. **Error**: the process is marked `BROKEN` in `listar`; tell the user what failed and offer `reparar <name>`, which copies the process into `borradores/` and takes you to step 4 of the loop without touching the saved version until the fix runs clean. **`necesita_confirmacion`**: ask the user, and repeat with `--confirmo` only if they authorize.
 
-## Ahorro de tokens
-Esta skill ya está pensada para gastar poco: `leer` y `eval` en vez de capturas, salidas cortas, y un proceso guardado se ejecuta con un comando en lugar de repetir toda la exploración.
+## Saving tokens
+This skill is already designed to spend little: `leer` and `eval` instead of screenshots, short outputs, and a saved process runs with one command instead of repeating the whole exploration.
 
-Si tu entorno ofrece además un modo de respuestas breves (por ejemplo, skills de estilo "caveman", que no se incluyen en este repositorio), puedes usarlo y mantenerlo mientras esté activo, y aplicarlo también a los encargos a agentes (ver `briefs/brief-proceso.md`). No prometas ahorros concretos: dependen del modelo y de la tarea. Los archivos que se guardan (`proceso.md`, comentarios en `ejecutar.mjs`) van siempre en prosa normal.
+If your environment also offers a terse-reply mode (for example "caveman"-style skills, which are not included in this repository), you can use it and keep it on while it is active, and apply it to the briefs you give other agents too (see `briefs/brief-proceso.md`). Do not promise specific savings: they depend on the model and the task. Files that get saved (`proceso.md`, comments in `ejecutar.mjs`) are always written in normal prose.
 
-Si el usuario pide ahorrar tokens y no tienes ese modo disponible, recomiéndale instalarlo y aclara que esta skill funciona igual sin él. No lo descargues ni inventes de dónde sacarlo.
+If the user asks to save tokens and you do not have that mode available, recommend installing it and make clear that this skill works the same without it. Do not download it or invent where to get it.
 
-## Varios procesos en paralelo (workflow-orquestar)
-Cuando el usuario pida construir o ejecutar **varios** procesos a la vez (por ejemplo, el mismo proceso en 10 sitios, o 3 procesos nuevos), repartirlos entre agentes ahorra tiempo. Para eso existe la skill `workflow-orquestar`, que reparte el trabajo entre agentes de CLI (`opencode`, `agy`, `codex`) con un script `wf.py`.
+## Several processes in parallel (workflow-orquestar)
+When the user asks to build or run **several** processes at once (for example, the same process on 10 sites, or 3 new processes), splitting them among agents saves time. The `workflow-orquestar` skill exists for that: it splits work among CLI agents (`opencode`, `agy`, `codex`) with a `wf.py` script.
 
-**Antes de proponerlo, comprueba que está disponible:** que tengas la carpeta de la skill `workflow-orquestar` (con su `SKILL.md` y `wf.py`), y que haya al menos un CLI trabajador (`opencode`, `agy` o `codex`; `Get-Command opencode`). Si falta algo, **recomienda instalarlo**, di qué falta (según esa skill, `opencode` se instala con `npm install -g @opencode/cli`; la skill `workflow-orquestar` se publica en el mismo repositorio que esta) y sigue con los procesos de uno en uno; no instales nada tú por tu cuenta.
+**Before proposing it, check that it is available:** that you have the `workflow-orquestar` skill folder (with its `SKILL.md` and `wf.py`), and that at least one worker CLI exists (`opencode`, `agy` or `codex`; `Get-Command opencode`). If something is missing, **recommend installing it**, say what is missing (according to that skill, `opencode` is installed with `npm install -g @opencode/cli`; the `workflow-orquestar` skill is published in the same repository as this one) and carry on with the processes one at a time; do not install anything on your own.
 
-Cómo combinarlas:
-1. El orquestador eres tú. Escribe el script de orquestación siguiendo la skill `workflow-orquestar`, con un agente por proceso. Por defecto corren hasta 4 a la vez.
-2. **Todos comparten un solo navegador y una sola sesión, cada agente en su propia pestaña**. Abre el navegador una vez (`abrir --perfil <nombre>` si quieres conservar la sesión), el usuario inicia sesión a mano **una sola vez** y los agentes trabajan en pestañas distintas. Es más rápido y gasta menos recursos que un navegador por agente.
-   - `proceso.mjs probar` y `ejecutar` abren y cierran su propia pestaña solos, así que se pueden lanzar varios a la vez contra el mismo puerto.
-   - Para explorar con `nav.mjs`, cada agente crea la suya con `nueva <url>` y pasa `--tab <id>` en todos sus comandos (con varias pestañas abiertas, `nav.mjs` se niega a actuar sin `--tab`).
-   - Un agente nunca toca la pestaña de otro, ni la inicial, ni cierra el navegador: `cerrar` es solo del orquestador, y mataría el trabajo de todos.
-3. **Navegadores o perfiles separados solo hacen falta** si los agentes necesitan **cuentas distintas**, o si el sitio no admite dos pestañas con la misma sesión a la vez (algunos cierran la sesión o mezclan el estado compartido). Entonces, un `--puerto` y un `--perfil` por cuenta.
-4. Dale a cada agente `briefs/brief-proceso.md` con sus valores (`NAME`, `PORT`, `TASK`, `PARAMS`, `MODE`, `REPORT` y `SKILL`, la ruta absoluta de la carpeta de esta skill) y no pongas secretos en el encargo. Cada agente que construye un proceso necesita un `NAME` distinto.
-5. **Los pasos irreversibles no se delegan.** El agente se detiene con `needs-confirm`; tú le preguntas al usuario y, si autoriza, repites esa ejecución con `--confirmo`.
-6. La compuerta de `guardar` protege aunque trabajen agentes: ninguno puede guardar un proceso sin un intento limpio y verificado. Aun así, **no te fíes de lo que digan en su informe**: comprueba con `listar` qué se guardó de verdad y, si hace falta, con `ejecutar`.
+How to combine them:
+1. You are the orchestrator. Write the orchestration script following the `workflow-orquestar` skill, with one agent per process. By default up to 4 run at once.
+2. **They all share a single browser and a single session, each agent in its own tab**. Open the browser once (`abrir --perfil <name>` if you want to keep the session), the user signs in by hand **only once**, and the agents work in different tabs. It is faster and uses fewer resources than one browser per agent.
+   - `proceso.mjs probar` and `ejecutar` open and close their own tab by themselves, so several can be launched at once against the same port.
+   - To explore with `nav.mjs`, each agent creates its own tab with `nueva <url>` and passes `--tab <id>` in all its commands (with several tabs open, `nav.mjs` refuses to act without `--tab`).
+   - An agent never touches another agent's tab, nor the initial one, nor closes the browser: `cerrar` belongs to the orchestrator alone, and it would kill everyone's work.
+3. **Separate browsers or profiles are only needed** if the agents need **different accounts**, or if the site does not allow two tabs with the same session at once (some sign you out or mix shared state). In that case, one `--puerto` and one `--perfil` per account.
+4. Give each agent `briefs/brief-proceso.md` with its values (`NAME`, `PORT`, `TASK`, `PARAMS`, `MODE`, `REPORT` and `SKILL`, the absolute path of this skill's folder) and do not put secrets in the task. Each agent that builds a process needs a different `NAME`.
+5. **Irreversible steps are not delegated.** The agent stops with `needs-confirm`; you ask the user and, if they authorize, repeat that run with `--confirmo`.
+6. The `guardar` gate protects you even when agents are working: none of them can save a process without a clean, verified attempt. Still, **do not trust what they say in their report**: check with `listar` what was really saved and, if needed, with `ejecutar`.
 
-**Cuántos a la vez.** Medido con Chrome y una página local de prueba: 4 ejecuciones simultáneas tardaron 2,4 s frente a 7,3 s seguidas; 12 a la vez, 4,2 s; 20 a la vez, 9,0 s, aunque cada una se alarga por competir por el navegador. Funcionó también con ventana visible. En sitios reales los tiempos serán otros: empieza con 4 (el valor por defecto del orquestador) y no pases de 8 por navegador sin comprobar.
+**How many at once.** Measured with Chrome and a local test page: 4 simultaneous runs took 2.4 s versus 7.3 s one after another; 12 at once, 4.2 s; 20 at once, 9.0 s, although each one gets longer from competing for the browser. It also worked with a visible window. On real sites the times will differ: start with 4 (the orchestrator's default) and do not go beyond 8 per browser without checking.
 
-Está probado que **varias ejecuciones simultáneas comparten un navegador sin pisarse** (con un bloqueo para `estado.json`). Lo que **no se ha ejecutado todavía** es el orquestador `wf.py` repartiendo agentes reales con esta skill. Si algo falla, díselo al usuario y continúa de forma secuencial.
+It is tested that **several simultaneous runs share a browser without stepping on each other** (with a lock for `estado.json`). What has **not been run yet** is the `wf.py` orchestrator distributing real agents with this skill. If something fails, tell the user and continue sequentially.
 
-## Reglas
-- Nunca pidas, escribas ni guardes contraseñas. Si aparece un login, para y pide al usuario que lo haga.
-- No pases datos sensibles como parámetros ni los escribas en `proceso.md`. El historial guarda solo los **nombres** de los parámetros y la URL sin consulta, pero las capturas de error (`ultimo-error.png`) pueden mostrar lo que había en la página.
-- Trabaja solo en las webs que nombró el usuario, y solo en ventanas abiertas con `abrir`. No uses ni cierres su navegador normal.
-- Un `--perfil` con nombre guarda cookies en disco. Dilo al usuario y ofrece `cerrar --borrar-perfil` cuando ya no lo necesite.
-- No simules ni falsees resultados: si no pudiste verificar algo, dilo.
+## Rules
+- Never ask for, type or store passwords. If a login appears, stop and ask the user to do it.
+- Do not pass sensitive data as parameters or write it in `proceso.md`. The history stores only the parameter **names** and the URL without its query string, but error screenshots (`ultimo-error.png`) can show whatever was on the page.
+- Work only on the websites the user named, and only in windows opened with `abrir`. Do not use or close their normal browser.
+- A named `--perfil` stores cookies on disk. Tell the user, and offer `cerrar --borrar-perfil` when they no longer need it.
+- Do not simulate or fake results: if you could not verify something, say so.
 
-## Archivos
-- `scripts/motor.mjs`: motor CDP y envoltorio `proceso()`. `scripts/nav.mjs`: tareas puntuales. `scripts/proceso.mjs`: memoria de procesos.
-- `borradores/<nombre>/`: procesos en construcción (`ejecutar.mjs`, `proceso.md`, `intentos.jsonl`).
-- `procesos/<nombre>/`: **la memoria**: `ejecutar.mjs`, `proceso.md` (ficha con especificación y errores resueltos), `estado.json` (usos y si está roto), `historial.jsonl`, `versiones/` (versiones anteriores).
-- `plantillas/`: punto de partida de un proceso nuevo.
-- `briefs/brief-proceso.md`: encargo listo para un agente trabajador (construir o ejecutar un proceso en su propio navegador).
-- `referencia.md`: API de `Pagina`, formato de un proceso y trampas conocidas.
+## Files
+- `scripts/motor.mjs`: CDP engine and the `proceso()` wrapper. `scripts/nav.mjs`: one-off tasks. `scripts/proceso.mjs`: process memory.
+- `borradores/<name>/` (drafts): processes under construction (`ejecutar.mjs`, `proceso.md`, `intentos.jsonl`).
+- `procesos/<name>/` (processes): **the memory**: `ejecutar.mjs`, `proceso.md` (sheet with the specification and solved errors), `estado.json` (uses and whether it is broken), `historial.jsonl`, `versiones/` (previous versions).
+- `plantillas/` (templates): starting point for a new process.
+- `briefs/brief-proceso.md`: a ready-made task for a worker agent (build or run a process in its own tab of the shared browser).
+- `referencia.md`: `Pagina` API, process format and known pitfalls.

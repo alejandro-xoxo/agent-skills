@@ -1,36 +1,36 @@
 # agent-skills
 
-Skills para agentes de IA que pueden ejecutar comandos de shell. **No dependen de un agente concreto**: son carpetas con instrucciones (`SKILL.md`) y scripts normales que cualquier agente puede leer y ejecutar. Con ellas, un agente puede manejar el navegador sin extensiones, repartir un trabajo grande entre varios agentes de línea de comandos y dejar la memoria de un proyecto organizada (estado, decisiones, lecciones y un vault de Obsidian).
+Skills for AI agents that can run shell commands. **They do not depend on a specific agent**: they are folders with instructions (`SKILL.md`) and ordinary scripts that any agent can read and run. With them, an agent can drive the browser without extensions, split a big job among several command-line agents and keep a project's memory organized (state, decisions, lessons and an Obsidian vault).
 
-*English summary: three agent-agnostic skills, each a folder with instructions (`SKILL.md`) and plain scripts. `navegador-cdp` drives Chrome or Edge over the DevTools Protocol with no extension, and keeps a memory of repeatable browser processes that are only saved after a clean, verified run. `workflow-orquestar` splits a big job across CLI agents (OpenCode, agy, Codex). `iniciar-memoria` sets up project memory (a short `AGENTS.md`, status and decision logs, an Obsidian vault) from a bundled template, and can optionally prepare a code graph and a local semantic-retrieval hook (the retrieval hook is wired for Claude Code and Windows only). The skill texts are written in Spanish.*
+The skills were first written in Spanish and are now in English. The folder names (`navegador-cdp`, `workflow-orquestar`, `iniciar-memoria`) and the names of the commands of `navegador-cdp` are kept in Spanish so existing installs keep working; each `SKILL.md` includes a table that translates them.
 
 ## Skills
 
-| Skill | Para qué sirve |
+| Skill | What it is for |
 |---|---|
-| [`navegador-cdp`](skills/navegador-cdp) | Maneja Chrome o Edge **sin extensiones**, con scripts de Node sin dependencias. Sirve para tareas puntuales en una web (abrir, leer, hacer clic, escribir, subir archivos, capturas) y para **crear, guardar y reutilizar procesos repetitivos**: un proceso nuevo solo se guarda en la memoria cuando se ejecutó de principio a fin sin errores y con el resultado verificado. |
-| [`workflow-orquestar`](skills/workflow-orquestar) | Orquesta un trabajo grande repartiéndolo entre agentes de CLI (OpenCode, agy y Codex), con grafos de dependencias, auto-corrección con tests, monitor visual en vivo, fusión de cambios y telemetría de tokens y costes. El agente que lidera se elige en `orquestador.json`. |
-| [`iniciar-memoria`](skills/iniciar-memoria) | Deja la **memoria de un proyecto** lista a partir de una plantilla incluida (`plantilla/`): un `AGENTS.md` corto que se carga siempre, `docs/ESTADO.md` (dónde quedó el trabajo), `docs/DECISIONS.md`, tres skills de memoria (`memoria`, `cerrar-tarea`, `auditar-memoria`) y un vault de Obsidian. Puede **conectar un vault que ya tengas** sin tocarlo. Opcionalmente prepara el terreno para un grafo de código (Graphify, sin instalarlo) y para una **recuperación automática** del vault: búsqueda semántica local que añade a cada mensaje los trozos más relevantes. Nada pesado se instala sin tu visto bueno. |
+| [`navegador-cdp`](skills/navegador-cdp) ("CDP browser") | Drives Chrome or Edge **without extensions**, with Node scripts that have no dependencies. It is for one-off tasks on a website (open, read, click, type, upload files, screenshots) and for **creating, saving and reusing repeatable processes**: a new process is only saved to memory after it has run from start to finish with no errors and with its result verified. |
+| [`workflow-orquestar`](skills/workflow-orquestar) ("orchestrate workflow") | Orchestrates a large job by splitting it among CLI agents (OpenCode, agy and Codex), with dependency graphs, self-healing with tests, a live visual monitor, change merging and token and cost telemetry. The leading agent is chosen in `orchestrator.json`. |
+| [`iniciar-memoria`](skills/iniciar-memoria) ("start memory") | Sets up a **project's memory** from a bundled template (`plantilla/`): a short `AGENTS.md` that is always loaded, `docs/STATE.md` (where the work stands), `docs/DECISIONS.md`, three memory skills (`memory`, `close-task`, `audit-memory`) and an Obsidian vault. It can **connect a vault you already have** without touching it. Optionally it prepares the ground for a code graph (Graphify, not installed) and for **automatic retrieval** of the vault: a local semantic search that adds the most relevant chunks to every message. Nothing heavy is installed without your go-ahead. |
 
-Las dos primeras se complementan: con `workflow-orquestar`, varios agentes pueden construir o ejecutar varios procesos de `navegador-cdp` a la vez, cada uno en su propia pestaña de un mismo navegador.
+The first two complement each other: with `workflow-orquestar`, several agents can build or run several `navegador-cdp` processes at once, each in its own tab of the same browser.
 
-## Requisitos
+## Requirements
 
-- **`navegador-cdp`**: Node.js 22 o superior y Chrome o Edge instalados.
-- **`iniciar-memoria`**: Windows con PowerShell 5.1 o superior (el script de la plantilla, `nuevo-proyecto.ps1`, es de PowerShell). Para la recuperación automática opcional, además, el launcher `py` con Python 3.10 a 3.13 (probado con 3.12) y unos 0,6 GB de descarga la primera vez. Obsidian es opcional.
-- **`workflow-orquestar`**: Python 3, git, y al menos un CLI trabajador instalado (`opencode`, `agy` o `codex`). Incluye `selftest.py`, que prueba el orquestador con un trabajador falso, sin gastar cuota ni llamar a ningún modelo.
+- **`navegador-cdp`**: Node.js 22 or later and Chrome or Edge installed.
+- **`iniciar-memoria`**: Windows with PowerShell 5.1 or later (the template script, `new-project.ps1`, is PowerShell). For the optional automatic retrieval, also the `py` launcher with Python 3.10 to 3.13 (tested with 3.12) and about 0.6 GB of download the first time. Obsidian is optional.
+- **`workflow-orquestar`**: Python 3, git, and at least one worker CLI installed (`opencode`, `agy` or `codex`). It includes `selftest.py`, which tests the orchestrator with a fake worker, without spending quota or calling any model.
 
-## Instalación
+## Installation
 
-Una skill es una carpeta con un `SKILL.md` (las instrucciones para el agente) y los scripts que ese texto indica ejecutar. No hay nada que compilar ni instalar con un gestor de paquetes.
+A skill is a folder with a `SKILL.md` (the instructions for the agent) and the scripts that text tells it to run. There is nothing to compile or to install with a package manager.
 
 ```bash
 git clone https://github.com/alejandro-xoxo/agent-skills.git
 ```
 
-Después, según tu agente:
+Then, depending on your agent:
 
-- **Si tu agente carga skills desde una carpeta** (por ejemplo, desde `~/.claude/skills/`), copia allí las carpetas de `skills/` que quieras:
+- **If your agent loads skills from a folder** (for example, from `~/.claude/skills/`), copy the folders of `skills/` that you want there:
 
   ```powershell
   # Windows (PowerShell)
@@ -41,74 +41,75 @@ Después, según tu agente:
   cp -r agent-skills/skills/navegador-cdp ~/.claude/skills/
   ```
 
-- **Si tu agente no carga skills**, deja la carpeta donde quieras y dile que lea el `SKILL.md`: por ejemplo, añade una línea a su archivo de instrucciones (como `AGENTS.md`):
+- **If your agent does not load skills**, leave the folder wherever you like and tell it to read the `SKILL.md`: for example, add a line to its instructions file (such as `AGENTS.md`):
 
   ```
-  Para manejar el navegador, lee y sigue skills/navegador-cdp/SKILL.md
+  To drive the browser, read and follow skills/navegador-cdp/SKILL.md
   ```
 
-Copia la carpeta de `iniciar-memoria` **completa**, con su subcarpeta `plantilla/` dentro: la skill busca la plantilla junto a su `SKILL.md`. Si separas las dos, la skill te preguntará dónde está.
+Copy the `iniciar-memoria` folder **whole**, with its `plantilla/` subfolder inside: the skill looks for the template next to its `SKILL.md`. If you separate the two, the skill will ask you where it is.
 
-Puede que tengas que reiniciar la sesión del agente para que reconozca las skills nuevas.
+You may have to restart the agent session for it to recognize the new skills.
 
-## Uso rápido de `navegador-cdp`
+## Quick start: `navegador-cdp`
 
-Los scripts se pueden usar directamente, con cualquier agente (o a mano):
+The scripts can be used directly, with any agent (or by hand). The command names are Spanish (`abrir` = open, `leer` = read, `cerrar` = close, `ayuda` = help, `listar` = list):
 
 ```bash
-node skills/navegador-cdp/scripts/nav.mjs abrir --url https://example.com   # abre un navegador aparte
-node skills/navegador-cdp/scripts/nav.mjs leer                              # lee el texto de la página
+node skills/navegador-cdp/scripts/nav.mjs abrir --url https://example.com   # opens a separate browser
+node skills/navegador-cdp/scripts/nav.mjs leer                              # reads the text of the page
 node skills/navegador-cdp/scripts/nav.mjs cerrar
-node skills/navegador-cdp/scripts/nav.mjs ayuda                             # lista todos los comandos
+node skills/navegador-cdp/scripts/nav.mjs ayuda                             # lists all the commands
 
-node skills/navegador-cdp/scripts/proceso.mjs listar                        # procesos guardados
+node skills/navegador-cdp/scripts/proceso.mjs listar                        # saved processes
 ```
 
-Un agente que lea `SKILL.md` sabe construir y reutilizar procesos. En los agentes que exponen las skills como comandos, se pide así (el nombre del comando puede variar según el agente):
+An agent that reads `SKILL.md` knows how to build and reuse processes. In agents that expose skills as commands, you ask for it like this (the command name may vary depending on the agent):
 
 ```
-/navegador-cdp crear descargar-extracto Entra en mi banco, descarga el extracto del mes y comprueba que el archivo existe
-/navegador-cdp listar
-/navegador-cdp ejecutar descargar-extracto mes=octubre
+/navegador-cdp create download-statement Go to my bank, download this month's statement and check that the file exists
+/navegador-cdp list
+/navegador-cdp run download-statement month=october
 ```
 
-La idea central: **un proceso que no se ha visto funcionar de principio a fin no vale como memoria**. `guardar` rechaza cualquier borrador cuyo último intento no haya salido limpio, que no tenga al menos una verificación del resultado real, o cuyo script haya cambiado después de probarlo. El detalle está en [`SKILL.md`](skills/navegador-cdp/SKILL.md) y [`referencia.md`](skills/navegador-cdp/referencia.md).
+The core idea: **a process that has not been seen working from start to finish does not count as memory**. `guardar` (save) rejects any draft whose last attempt did not run clean, that has no verification of the real result, or whose script changed after it was tested. The detail is in [`SKILL.md`](skills/navegador-cdp/SKILL.md) and [`referencia.md`](skills/navegador-cdp/referencia.md).
 
-## Uso rápido de `iniciar-memoria`
+## Quick start: `iniciar-memoria`
 
-Con un agente que cargue la skill, basta con pedírselo ("inicia la memoria de este proyecto", "conéctalo a mi vault de Obsidian"). También puedes usar el script directamente, sin agente:
+With an agent that loads the skill, just ask it ("start the memory of this project", "connect it to my Obsidian vault"). You can also use the script directly, without an agent:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File skills\iniciar-memoria\plantilla\nuevo-proyecto.ps1 `
-  -Destino "C:\ruta\a\mi-proyecto" -Nombre "Mi proyecto" -Descripcion "Qué hace" -ConGit
+powershell -NoProfile -ExecutionPolicy Bypass -File skills\iniciar-memoria\plantilla\new-project.ps1 `
+  -Destination "C:\path\to\my-project" -Name "My project" -Description "What it does" -WithGit
 ```
 
-Crea `AGENTS.md`, `docs/` y un vault en `conocimiento/` **sin sobrescribir** lo que ya exista (`-Forzar` lo permite). Con `-Vault "<ruta>"` usa un vault de Obsidian que ya tengas en lugar de crear uno. `-ConGraphify` y `-ConRag` solo copian archivos y añaden líneas a `AGENTS.md` y `.gitignore`; activar el RAG es un paso aparte (`.rag\preparar.ps1`). Los detalles, los niveles de memoria y qué está comprobado están en [`plantilla/README.md`](skills/iniciar-memoria/plantilla/README.md).
+It creates `AGENTS.md`, `docs/` and a vault in `knowledge/` **without overwriting** anything that already exists (`-Force` allows it). With `-Vault "<path>"` it uses an Obsidian vault you already have instead of creating one. `-WithGraphify` and `-WithRag` only copy files and add lines to `AGENTS.md` and `.gitignore`; turning on the RAG is a separate step (`.rag\prepare.ps1`). The details, the memory levels and what has been verified are in [`plantilla/README.md`](skills/iniciar-memoria/plantilla/README.md).
 
-## Uso rápido de `workflow-orquestar`
+## Quick start: `workflow-orquestar`
 
-El agente que lidera escribe un script corto con las primitivas del orquestador (`agent`, `parallel`, `dag`, `auto_integrate`...) y lo lanza con `python wf.py script.py`. Mira [`SKILL.md`](skills/workflow-orquestar/SKILL.md) para las primitivas, los niveles de calidad (`tier`) y las reglas de seguridad. Para elegir qué CLI lidera, crea un `orquestador.json` en la carpeta de la skill con `{"orquestador": "codex"}` (valores: `claude`, `agy`, `opencode`, `codex`; por defecto `claude`).
+The leading agent writes a short script with the orchestrator's primitives (`agent`, `parallel`, `dag`, `auto_integrate`...) and launches it with `python wf.py script.py`. See [`SKILL.md`](skills/workflow-orquestar/SKILL.md) for the primitives, the quality levels (`tier`) and the safety rules. To choose which CLI leads, create an `orchestrator.json` in the skill's folder with `{"orchestrator": "codex"}` (values: `claude`, `agy`, `opencode`, `codex`; the default is `claude`). The older Spanish name, `orquestador.json` with the key `orquestador`, still works.
 
-## Estado y límites
+## Status and limits
 
-Es una versión inicial (`0.1`). Conviene decir con claridad qué está comprobado:
+This is an initial version (`0.1`). It is worth saying clearly what has been verified:
 
-- **Probado**: `navegador-cdp` en Windows 10 con Node 24, Edge y Chrome 156, con y sin ventana visible: el ciclo completo de procesos (fallar, corregir, guardar, reutilizar, reparar), incluido uno contra un sitio real, un perfil persistente que conserva la sesión, y hasta 20 ejecuciones a la vez en un mismo navegador. Hasta ahora lo ha manejado un solo agente.
-- **Sin probar**: macOS y Linux (el código los contempla, pero no se han ejecutado); `navegador-cdp` con otros agentes distintos del anterior; iniciar sesión en sitios reales (siempre lo hace la persona a mano, y algunos sitios, como Google, pueden bloquearlo en un navegador con depuración remota); y la combinación de las dos skills con agentes reales de principio a fin.
-- **`iniciar-memoria`**: la plantilla y el script se probaron en Windows 10 (PowerShell 5.1), incluido el uso con un vault externo y la preparación de Graphify y del RAG. La recuperación automática se activó y midió en un proyecto real con Python 3.12 (la mezcla de búsqueda por significado y por palabras acertó en los 3 primeros resultados el 95% de las veces con 20 preguntas escritas por quien conocía las notas; con otras notas el resultado puede ser distinto). **Sin probar:** macOS y Linux, otras versiones de Python, otros agentes distintos del anterior, y que el servidor local siga vivo durante semanas de uso real. Los ganchos de la recuperación automática (`.claude/settings.local.json`) están escritos para Claude Code; en otro agente hay que enganchar `rag.py hook` a mano o no usarla. Graphify no se instala nunca desde la skill.
-- Las páginas dinámicas, los `iframe` y los diálogos del navegador (`alert`, `confirm`) tienen soporte limitado. Los detalles y las trampas conocidas están en `referencia.md`.
+- **Tested**: `navegador-cdp` on Windows 10 with Node 24, Edge and Chrome 156, with and without a visible window: the complete process cycle (fail, fix, save, reuse, repair), including one against a real site, a persistent profile that keeps the session, and up to 20 simultaneous runs in a single browser. So far it has been driven by a single agent. After the translation to English, its create → test → save → run → repair → delete cycle was run again against a local page in a headless browser.
+- **Untested**: macOS and Linux (the code allows for them, but they have not been run); `navegador-cdp` with agents other than the one above; signing in to real sites (the person always does it by hand, and some sites, such as Google, may block it in a browser with remote debugging); and the combination of the two skills with real agents from start to finish.
+- **`workflow-orquestar`**: `selftest.py` (26 checks with a fake worker) passes. It has not been run against real OpenCode, agy or Codex workers after the translation.
+- **`iniciar-memoria`**: the template and the script were tested on Windows 10 (PowerShell 5.1), including use with an external vault and the preparation of Graphify and the RAG. Automatic retrieval was turned on and measured in a real project with Python 3.12 (the mix of search by meaning and by keywords hit in the top 3 results 95% of the time with 20 questions written by someone who knew the notes; with other notes the result may differ). **Untested:** macOS and Linux, other Python versions, agents other than the one above, and the local server staying alive through weeks of real use. The hooks for automatic retrieval (`.claude/settings.local.json`) are written for Claude Code; with another agent you have to wire `rag.py hook` by hand or not use it. Graphify is never installed by the skill.
+- Dynamic pages, `iframe`s and browser dialogs (`alert`, `confirm`) have limited support. The details and the known pitfalls are in `referencia.md`.
 
-## Seguridad y uso responsable
+## Safety and responsible use
 
-- El navegador se abre con un **puerto de depuración local**: mientras la ventana existe, cualquier proceso de tu equipo puede controlarla y ver las sesiones que tenga abiertas. Ciérrala al terminar.
-- **Nunca se piden ni se guardan contraseñas.** Cuando un sitio pide iniciar sesión, la persona lo hace a mano en la ventana. Un perfil con nombre guarda cookies en disco, fuera del repositorio.
-- No pases datos sensibles como parámetros de un proceso. Las capturas de error pueden mostrar lo que había en la página.
-- Los pasos irreversibles (enviar, pagar, borrar, publicar) se detienen hasta que la persona los confirme.
-- `iniciar-memoria` no guarda contraseñas ni datos personales. Si conectas un vault con material de personas, `.rag/indice/` guarda el **texto completo** de las fuentes que indexes: está fuera de git y no debe compartirse. Los vectores se calculan en tu equipo; el contexto que se inyecta en un mensaje sí viaja al modelo como parte de la conversación.
-- Automatiza solo sitios y cuentas que sean tuyos o para los que tengas permiso, y respeta los términos de uso de cada sitio. El autor no se hace responsable del uso que se haga de estas herramientas.
+- The browser is opened with a **local debugging port**: while the window exists, any process on your machine can control it and see the sessions it has open. Close it when you are done.
+- **Passwords are never requested or stored.** When a site asks to sign in, the person does it by hand in the window. A named profile stores cookies on disk, outside the repository.
+- Do not pass sensitive data as parameters of a process. Error screenshots can show what was on the page.
+- Irreversible steps (send, pay, delete, publish) stop until the person confirms them.
+- `iniciar-memoria` does not store passwords or personal data. If you connect a vault with material about people, `.rag/index/` stores the **full text** of the sources you index: it is outside git and must not be shared. The vectors are computed on your machine; the context injected into a message does travel to the model as part of the conversation.
+- Automate only sites and accounts that are yours or that you have permission for, and respect each site's terms of use. The author is not responsible for how these tools are used.
 
-## Autor y licencia
+## Author and license
 
-Creado por [alejandro-xoxo](https://github.com/alejandro-xoxo). Licencia propietaria ([LICENSE](LICENSE)): todos los derechos reservados. Puedes ver el código para evaluarlo; no puedes copiarlo, modificarlo, redistribuirlo ni venderlo sin permiso previo y por escrito del autor. Las versiones anteriores a este cambio de licencia se publicaron bajo MIT. Mira también [`NOTICE.md`](NOTICE.md) para los créditos y las herramientas de terceros que estas skills usan pero no incluyen.
+Created by [alejandro-xoxo](https://github.com/alejandro-xoxo). Proprietary license ([LICENSE](LICENSE)): all rights reserved. You may view the code to evaluate it; you may not copy, modify, redistribute or sell it without the author's prior written permission. Versions before this license change were published under MIT. See also [`NOTICE.md`](NOTICE.md) for the credits and the third-party tools these skills use but do not include.
 
-Los issues y las propuestas de mejora son bienvenidos.
+Issues and improvement proposals are welcome.

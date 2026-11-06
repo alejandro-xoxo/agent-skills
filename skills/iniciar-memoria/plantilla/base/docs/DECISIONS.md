@@ -1,8 +1,8 @@
-# Registro de decisiones — {{NOMBRE}}
+# Decision log — {{NAME}}
 
-> Se **anexa** al final; no se reescribe. Cada entrada tiene como máximo 5 líneas: qué se decidió, por qué, qué cambia y, si hay, el enlace a la nota ADR en `conocimiento/04 Decisiones/`.
+> It is **appended** to at the end; it is not rewritten. Each entry has at most 5 lines: what was decided, why, what changes and, if there is one, the link to the ADR note in `knowledge/04 Decisions/`.
 
-## {{FECHA}} — Se adopta la plantilla de memoria
-- Decisión: la memoria del proyecto vive en `AGENTS.md` (siempre cargado), `docs/ESTADO.md` (estado vivo) y `conocimiento/` (largo plazo).
-- Por qué: cada sesión empieza sin recuerdos; así se carga poco y se consulta lo demás bajo demanda.
-- Cambia: al cerrar una tarea importante se actualizan `ESTADO.md` y `DECISIONS.md`.
+## {{DATE}} — The memory template is adopted
+- Decision: the project's memory lives in `AGENTS.md` (always loaded), `docs/STATE.md` (live state) and `knowledge/` (long term).
+- Why: every session starts with no memories; this way little is loaded and the rest is consulted on demand.
+- What changes: when an important task is closed, `STATE.md` and `DECISIONS.md` are updated.

@@ -1,27 +1,27 @@
-# Créditos y avisos
+# Credits and notices
 
-## Autoría
+## Authorship
 
-Las skills `navegador-cdp`, `workflow-orquestar` e `iniciar-memoria` (con su carpeta `plantilla/`) de este repositorio son obra de **alejandro-xoxo** (https://github.com/alejandro-xoxo) y se publican bajo una licencia propietaria, con todos los derechos reservados (ver `LICENSE`). Copyright (c) 2026 alejandro-xoxo. Las versiones anteriores a este cambio se publicaron bajo la licencia MIT.
+The `navegador-cdp`, `workflow-orquestar` and `iniciar-memoria` skills (with its `plantilla/` folder) of this repository are the work of **alejandro-xoxo** (https://github.com/alejandro-xoxo) and are published under a proprietary license, with all rights reserved (see `LICENSE`). Copyright (c) 2026 alejandro-xoxo. Versions before this change were published under the MIT license.
 
-## Herramientas de terceros que se usan pero no se incluyen
+## Third-party tools that are used but not included
 
-Estas skills funcionan junto a programas que **no forman parte de este repositorio** y que se rigen por sus propias licencias y condiciones de uso. Instálalos desde sus fuentes oficiales:
+These skills work alongside programs that are **not part of this repository** and are governed by their own licenses and terms of use. Install them from their official sources:
 
-- **Node.js**, y los navegadores **Google Chrome** y **Microsoft Edge**, con su protocolo de depuración (Chrome DevTools Protocol), que usa `navegador-cdp`.
-- **Python 3** y **git**, que usa `workflow-orquestar`.
-- **PowerShell** (Windows), **Obsidian** (opcional; el vault son archivos de texto y no hace falta tenerlo instalado) y, solo si activas las funciones opcionales de `iniciar-memoria`, **Graphify** (Apache-2.0, solo se prepara el terreno: no se instala ni se redistribuye) y las bibliotecas de Python que instala `plantilla/extras/rag/preparar.ps1` en un entorno local del proyecto, sin incluirlas en este repositorio: `fastembed` (Apache-2.0), `numpy` (BSD-3-Clause y otras licencias permisivas), `onnxruntime` (MIT), `tokenizers` (Apache-2.0) y `huggingface_hub` (Apache-2.0).
-- El modelo de embeddings `jinaai/jina-embeddings-v2-base-es` (Apache-2.0, según su ficha en Hugging Face), que se descarga la primera vez que se activa la recuperación automática y **no** se incluye aquí. Su licencia y condiciones son las de sus autores.
-- Los CLI de agentes que `workflow-orquestar` puede lanzar como trabajadores: **OpenCode CLI** (`opencode`), **Antigravity CLI** (`agy`) y **Codex CLI** (`codex`). Su uso puede requerir una cuenta, tener cuota y costes, y sus propios términos.
+- **Node.js**, and the **Google Chrome** and **Microsoft Edge** browsers, with their debugging protocol (Chrome DevTools Protocol), which `navegador-cdp` uses.
+- **Python 3** and **git**, which `workflow-orquestar` uses.
+- **PowerShell** (Windows), **Obsidian** (optional; the vault is plain text files and it does not need to be installed) and, only if you turn on the optional features of `iniciar-memoria`, **Graphify** (Apache-2.0; only the ground is prepared: it is neither installed nor redistributed) and the Python libraries that `plantilla/extras/rag/prepare.ps1` installs into a local environment of the project, without including them in this repository: `fastembed` (Apache-2.0), `numpy` (BSD-3-Clause and other permissive licenses), `onnxruntime` (MIT), `tokenizers` (Apache-2.0) and `huggingface_hub` (Apache-2.0).
+- The embedding model `jinaai/jina-embeddings-v2-base-es` (Apache-2.0, according to its Hugging Face page), which is downloaded the first time automatic retrieval is turned on and is **not** included here. Its license and terms are those of its authors.
+- The agent CLIs that `workflow-orquestar` can launch as workers: **OpenCode CLI** (`opencode`), **Antigravity CLI** (`agy`) and **Codex CLI** (`codex`). Using them may require an account, have quotas and costs, and their own terms.
 
-## Skills relacionadas que no se incluyen
+## Related skills that are not included
 
-El texto de las skills menciona como **opcionales** modos de respuesta breve que ofrecen otras skills. No se incluyen ni se redistribuyen aquí; su autoría y su licencia son las de sus propios autores. El orquestador `wf.py` incorpora su propio texto de estilo breve y no necesita instalarlas.
+The text of the skills mentions, as **optional**, terse-reply modes offered by other skills. They are neither included nor redistributed here; their authorship and license are those of their own authors. The `wf.py` orchestrator embeds its own terse-style text and does not need them installed.
 
-## Contenido de terceros que no se incluye
+## Third-party content that is not included
 
-`iniciar-memoria` se inspira en prácticas habituales de memoria para agentes (un `AGENTS.md` corto, un vault de Obsidian, skills con carga progresiva) y cita la documentación de Claude Code sobre memoria como referencia (<https://code.claude.com/docs/en/memory>). No se copia texto de esa documentación ni de ninguna guía de terceros. El vault de ejemplo que genera la plantilla está vacío: no contiene datos de ningún proyecto ni de ninguna persona.
+`iniciar-memoria` is inspired by common agent-memory practices (a short `AGENTS.md`, an Obsidian vault, skills with progressive loading) and cites Claude Code's documentation about memory as a reference (<https://code.claude.com/docs/en/memory>). No text is copied from that documentation or from any third-party guide. The example vault the template generates is empty: it contains no data from any project or any person.
 
-## Marcas
+## Trademarks
 
-Chrome, Edge, OpenCode, Antigravity, Codex, Claude Code, Obsidian, Graphify, Hugging Face y los demás nombres de productos mencionados pertenecen a sus respectivos titulares y se nombran solo para indicar compatibilidad.
+Chrome, Edge, OpenCode, Antigravity, Codex, Claude Code, Obsidian, Graphify, Hugging Face and the other product names mentioned belong to their respective owners and are named only to indicate compatibility.

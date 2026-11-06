@@ -1,116 +1,118 @@
 ---
 name: workflow-orquestar
-description: Orquesta un trabajo grande repartiéndolo entre agentes de CLI (OpenCode con modelos gratuitos por defecto, agy de respaldo con Gemini/Claude, y Codex de OpenAI) con soporte para grafos DAG, auto-corrección de tests (self-healing), streaming en vivo con monitor visual, fusión inteligente 3-way y telemetría de tokens y costes. Úsala cuando el usuario pida orquestar, repartir en paralelo, auditar o implementar por partes.
+description: Orchestrates a large job by splitting it among CLI agents (OpenCode with free models by default, agy as a fallback with Gemini/Claude, and OpenAI's Codex), with support for DAG graphs, test self-healing, live streaming with a visual monitor, smart 3-way merging and token and cost telemetry. Use it when the user asks to orchestrate, split work in parallel, audit or implement in parts.
 ---
 
-# Orquestar con `wf.py` (Arquitectura Multi-Agente)
+# Orchestrate with `wf.py` (Multi-Agent Architecture)
 
-El orquestador (el agente que lidera el trabajo; se elige en `orquestador.json`) planifica, escribe el script de orquestación, lo ejecuta y valida la entrega final. Los agentes de `opencode` y `agy` son la mano de obra en copias aisladas.
+(`workflow-orquestar` is Spanish for "orchestrate workflow"; the folder name is kept so existing installs keep working.)
+
+The orchestrator (the agent that leads the work; it is chosen in `orchestrator.json`, e.g. `{"orchestrator": "codex"}`; the older Spanish name `orquestador.json` with the key `orquestador` still works) plans, writes the orchestration script, runs it and validates the final delivery. The `opencode` and `agy` agents are the labor force, working in isolated copies.
 
 ---
 
-## 1. Motores y Trabajadores
+## 1. Engines and Workers
 
-- **`opencode`** (primero por defecto, gratis): modelos gratuitos de OpenCode CLI (`npm install -g @opencode/cli`). Sin sesión ni costo; en pruebas es el más rápido (10-25 s). Comprobar con:
-  `opencode run --standalone -m opencode/nemotron-3-ultra-free "Responde solo: ok"`
-- **`agy`**: Antigravity CLI con modelos Gemini y Claude; cuota alta y soporte de herramientas. Comprobar con:
-  `agy -p "Responde solo: ok" --mode plan --model gemini-3.8-flash-low`
-- **`codex`** (cuenta de OpenAI, de pago): solo con `worker="codex"`. Usa el modelo que la persona tenga configurado en Codex (`codex exec -s read-only|workspace-write -C <carpeta>`).
+- **`opencode`** (first by default, free): free models of the OpenCode CLI (`npm install -g @opencode/cli`). No sign-in or cost; in tests it is the fastest (10-25 s). Check with:
+  `opencode run --standalone -m opencode/nemotron-3-ultra-free "Reply only: ok"`
+- **`agy`**: Antigravity CLI with Gemini and Claude models; high quota and tool support. Check with:
+  `agy -p "Reply only: ok" --mode plan --model gemini-3.8-flash-low`
+- **`codex`** (OpenAI account, paid): only with `worker="codex"`. It uses the model the person has configured in Codex (`codex exec -s read-only|workspace-write -C <folder>`).
 
-### Niveles de calidad (`tier`) y modelos
+### Quality levels (`tier`) and models
 
-| `tier` | `opencode` (gratis) | `agy` (Gemini / Claude) | `codex` | Para qué |
+| `tier` | `opencode` (free) | `agy` (Gemini / Claude) | `codex` | What for |
 |---|---|---|---|---|
-| `max` | `opencode/nemotron-3-ultra-free` | `gemini-4-argon-high` | `default` | Arquitectura compleja y seguridad |
-| `pro` | `opencode/nemotron-3-ultra-free` | `gemini-3.8-flash-high` | `default` | Cambios que cruzan módulos, refactorización profunda |
-| `standard` | `opencode/deepseek-v4.1-flash-free` | `gemini-3.8-flash-medium` | `default` | Desarrollo general y controladores |
-| `fast` | `opencode/minimax-m3.1-flash-free` | `gemini-3.8-flash-low` | `default` | Tareas mecánicas, scaffolding, alto volumen |
-| `design` | — | `claude-sonnet-5-5-medium` | — | Diseño gráfico y componentes visuales |
+| `max` | `opencode/nemotron-3-ultra-free` | `gemini-4-argon-high` | `default` | Complex architecture and security |
+| `pro` | `opencode/nemotron-3-ultra-free` | `gemini-3.8-flash-high` | `default` | Changes that cross modules, deep refactoring |
+| `standard` | `opencode/deepseek-v4.1-flash-free` | `gemini-3.8-flash-medium` | `default` | General development and controllers |
+| `fast` | `opencode/minimax-m3.1-flash-free` | `gemini-3.8-flash-low` | `default` | Mechanical tasks, scaffolding, high volume |
+| `design` | — | `claude-sonnet-5-5-medium` | — | Graphic design and visual components |
 
-El orden por defecto es `opencode` y luego `agy`.
+The default order is `opencode`, then `agy`.
 
 ---
 
-## 2. Nuevas Funcionalidades del Orquestador
+## 2. Orchestrator Features
 
-### A. Monitor Visual en Tiempo Real
-Permite ver en una **segunda terminal fija** exactamente qué está haciendo cada agente (lecturas, ediciones, comandos, tests):
+### A. Real-Time Visual Monitor
+Lets you watch, in a **second, fixed terminal**, exactly what each agent is doing (reads, edits, commands, tests):
 ```powershell
-# En la Terminal 2:
-python <carpeta de la skill>/monitor.py
-# O también:
-python <carpeta de la skill>/wf.py --monitor
+# In Terminal 2:
+python <skill folder>/monitor.py
+# Or also:
+python <skill folder>/wf.py --monitor
 ```
-- **Teclas interactivas:** `[1-9]` para enfocar un agente específico, `[0]` para vista mosaico global de todos los agentes a la vez, `[Q]` para salir.
-- El log en disco se escribe en tiempo real en `%TEMP%\wf-runs\<RUN_ID>\agente-N.log`.
+- **Interactive keys:** `[1-9]` to focus on a specific agent, `[0]` for a global tiled view of all agents at once, `[Q]` to quit.
+- The on-disk log is written in real time to `%TEMP%\wf-runs\<RUN_ID>\agent-N.log`.
 
-### B. Auto-Corrección y Pruebas Locales (`verify_cmd` / Self-Healing)
-El agente no se da por terminado hasta que su código pase la suite de verificación indicada:
+### B. Self-Healing and Local Tests (`verify_cmd`)
+The agent is not considered done until its code passes the verification suite you give it:
 ```python
 await agent(
-    "Implementa el servicio StudentService en StudentService.java",
+    "Implement the StudentService service in StudentService.java",
     schema={"type": "object", "required": ["resumen"], "properties": {"resumen": {"type": "string"}}},
     workspace="branch",
     edit=True,
-    verify_cmd="mvn test -Dtest=StudentServiceTest",  # Corre dentro de la copia aislada
-    max_fixes=2                                      # Reintenta hasta 2 veces inyectando el error
+    verify_cmd="mvn test -Dtest=StudentServiceTest",  # Runs inside the isolated copy
+    max_fixes=2                                      # Retries up to 2 times, feeding the error back
 )
 ```
-Si el test falla, `wf.py` captura el error y le pide al subagente que corrija los archivos en su copia antes de entregar.
+If the test fails, `wf.py` captures the error and asks the subagent to fix the files in its copy before handing in the work. (The schema key `resumen` means "summary"; schemas are yours to define.)
 
-### C. Grafos de Dependencias (`dag` y `task`)
-Permite definir flujos no lineales donde una tarea espera los resultados de otras:
+### C. Dependency Graphs (`dag` and `task`)
+Lets you define non-linear flows in which a task waits for the results of others:
 ```python
-t1 = task("db", prompt="Diseña el esquema SQL...", schema=SchemaDB)
-t2 = task("servicio", prompt="Crea el servicio...", schema=SchemaService, depends_on=[t1])
-t3 = task("controlador", prompt="Crea el controlador...", schema=SchemaCtrl, depends_on=[t2])
-t4 = task("documentacion", prompt="Genera el README...", schema=SchemaDoc, depends_on=[t1, t2])
+t1 = task("db", prompt="Design the SQL schema...", schema=SchemaDB)
+t2 = task("service", prompt="Create the service...", schema=SchemaService, depends_on=[t1])
+t3 = task("controller", prompt="Create the controller...", schema=SchemaCtrl, depends_on=[t2])
+t4 = task("docs", prompt="Generate the README...", schema=SchemaDoc, depends_on=[t1, t2])
 
-# Resuelve el orden topológico y paraleliza las tareas listas
-resultados = await dag([t1, t2, t3, t4])
+# Resolves the topological order and parallelizes the tasks that are ready
+results = await dag([t1, t2, t3, t4])
 ```
 
-### D. Fusión Inteligente y Detección de Colisiones (`auto_integrate`)
-- `check_collisions()`: Comprueba si dos copias modificaron los mismos archivos.
-- `auto_integrate()`: Si los conjuntos de archivos son disjuntos, aplica todos los cambios directamente con `git apply --3way --whitespace=fix`.
+### D. Smart Merging and Collision Detection (`auto_integrate`)
+- `check_collisions()`: checks whether two copies modified the same files.
+- `auto_integrate()`: if the sets of files are disjoint, applies all the changes directly with `git apply --3way --whitespace=fix`.
 
-### E. Telemetría y Estimación de Costes
-Al finalizar el workflow, `wf.py` reporta en consola y en `telemetry.json`:
-- Tiempo total vs. tiempo acumulado de agentes (cálculo de aceleración paralela, ej: `3.5x`).
-- Tokens estimados (input y output).
-- Costo económico aproximado en USD.
+### E. Telemetry and Cost Estimation
+When the workflow finishes, `wf.py` reports to the console and to `telemetry.json`:
+- Total time vs. accumulated agent time (parallel speed-up calculation, e.g. `3.5x`).
+- Estimated tokens (input and output).
+- Approximate cost in USD.
 
 ---
 
-## 3. Primitivas Disponibles
+## 3. Available Primitives
 
-| Primitiva | Descripción |
+| Primitive | Description |
 |---|---|
-| `agent(prompt, schema, role, tier, worker, workspace, edit, timeout, verify_cmd, max_fixes)` | Define un agente ejecutable. |
-| `parallel(items, fn)` | Ejecuta tareas en paralelo (hasta `WF_MAX_PARALLEL`, por defecto 4). |
-| `pipeline(items, fn)` | Ejecuta tareas en orden secuencial estricto. |
-| `task(id, prompt, schema, depends_on, **kwargs)` | Define un nodo para grafos dirigidos. |
-| `dag(tasks)` | Resuelve y ejecuta el grafo de tareas concurrentemente. |
-| `check_collisions()` | Retorna colisiones entre worktrees. |
-| `auto_integrate()` | Aplica los diffs con 3-way merge si no hay colisiones. |
-| `phase(name)` | Define y registra una fase en logs y en el monitor visual. |
-| `log(...)` | Imprime y registra información en `log.txt`. |
-| `cleanup_worktrees()` | Elimina las copias temporales aisladas. |
+| `agent(prompt, schema, role, tier, worker, workspace, edit, timeout, verify_cmd, max_fixes)` | Defines a runnable agent. |
+| `parallel(items, fn)` | Runs tasks in parallel (up to `WF_MAX_PARALLEL`, 4 by default). |
+| `pipeline(items, fn)` | Runs tasks in strict sequential order. |
+| `task(id, prompt, schema, depends_on, **kwargs)` | Defines a node for directed graphs. |
+| `dag(tasks)` | Resolves and runs the task graph concurrently. |
+| `check_collisions()` | Returns collisions between worktrees. |
+| `auto_integrate()` | Applies the diffs with a 3-way merge if there are no collisions. |
+| `phase(name)` | Defines and records a phase in the logs and the visual monitor. |
+| `log(...)` | Prints and records information in `log.txt`. |
+| `cleanup_worktrees()` | Removes the isolated temporary copies. |
 
 ---
 
-## 4. Plantilla de Implementación Completa
+## 4. Full Implementation Template
 
 ```python
-phase("Implementación Paralela")
+phase("Parallel Implementation")
 
-tareas = [
-    {"id": "estudiantes", "archivos": ["StudentService.java"], "test": "mvn test -Dtest=StudentServiceTest"},
-    {"id": "profesores", "archivos": ["TeacherService.java"], "test": "mvn test -Dtest=TeacherServiceTest"},
+tasks = [
+    {"id": "students", "files": ["StudentService.java"], "test": "mvn test -Dtest=StudentServiceTest"},
+    {"id": "teachers", "files": ["TeacherService.java"], "test": "mvn test -Dtest=TeacherServiceTest"},
 ]
 
-hechas = await parallel(tareas, lambda t: agent(
-    f"Implementa {t['id']} editando solo: {t['archivos']}. Sin commit.",
+done = await parallel(tasks, lambda t: agent(
+    f"Implement {t['id']} editing only: {t['files']}. No commit.",
     schema={"type": "object", "required": ["resumen", "ok"], "properties": {"resumen": {"type": "string"}, "ok": {"type": "boolean"}}},
     role=t["id"],
     tier="standard",
@@ -120,18 +122,18 @@ hechas = await parallel(tareas, lambda t: agent(
     max_fixes=2
 ))
 
-phase("Integración")
-# Verifica colisiones y fusiona con 3-way merge
-integradas = auto_integrate()
-log("Ramas integradas exitosamente:", integradas)
+phase("Integration")
+# Checks for collisions and merges with a 3-way merge
+integrated = auto_integrate()
+log("Branches integrated successfully:", integrated)
 cleanup_worktrees()
 ```
 
 ---
 
-## 5. Reglas de Seguridad
+## 5. Safety Rules
 
-1. **Nunca** pasar secretos, credenciales ni tokens en los prompts.
-2. Los subagentes **no hacen commit ni push**; trabajan en sus copias aisladas y los cambios se aplican con `auto_integrate()`.
-3. Todo encargo lleva por defecto un estilo de respuesta breve (el texto «ultracave» que incorpora `wf.py`; se apaga con `WF_CAVEMAN=0`) para ahorrar tokens y latencia.
-4. Si un agente falla, `wf.py` pasa al siguiente trabajador de la lista automáticamente.
+1. **Never** pass secrets, credentials or tokens in the prompts.
+2. Subagents **do not commit or push**; they work in their isolated copies and the changes are applied with `auto_integrate()`.
+3. Every task carries a terse-reply style by default (the "ultracave" text that `wf.py` embeds; turn it off with `WF_CAVEMAN=0`) to save tokens and latency.
+4. If an agent fails, `wf.py` automatically moves on to the next worker in the list.

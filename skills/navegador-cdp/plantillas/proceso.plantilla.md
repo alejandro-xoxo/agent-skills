@@ -1,30 +1,30 @@
 ---
 nombre: __NOMBRE__
 descripcion: __DESCRIPCION__
-sitio: (completar)
-sesion: (completar: "no" si no hace falta iniciar sesión, o "sí" y en qué perfil)
-parametros: (completar: nombres separados por comas, o "ninguno")
+sitio: (complete)
+sesion: (complete: "no" if no login is needed, or "yes" and in which profile)
+parametros: (complete: names separated by commas, or "none")
 creado: __FECHA__
 ---
 # __NOMBRE__
 
-## Qué hace
-(completar: el resultado que deja el proceso, en una o dos frases)
+## What it does
+(complete: the result the process leaves behind, in one or two sentences)
 
-## Parámetros
-(completar: cada parámetro, qué significa y un ejemplo; o "ninguno")
+## Parameters
+(complete: each parameter, what it means and an example; or "none")
 
-## Antes de ejecutar
-(completar: navegador abierto, sesión iniciada, datos que deben existir)
+## Before running
+(complete: browser open, session signed in, data that must exist)
 
-## Pasos
-(completar: los pasos en orden, igual que en ejecutar.mjs)
+## Steps
+(complete: the steps in order, the same as in ejecutar.mjs)
 
-## Cómo se verifica que salió bien
-(completar: las comprobaciones que hace verificar(...) y por qué demuestran que el resultado es real)
+## How to verify it went well
+(complete: the checks that verificar(...) performs and why they prove the result is real)
 
-## Pasos irreversibles
-(completar: qué pasos no se pueden deshacer y piden confirmación; o "ninguno")
+## Irreversible steps
+(complete: which steps cannot be undone and ask for confirmation; or "none")
 
-## Notas y trampas
-(completar: cosas del sitio que conviene saber, como cambios de diseño, esperas o ventanas emergentes; o "ninguna")
+## Notes and pitfalls
+(complete: things about the site worth knowing, such as layout changes, waits or pop-up windows; or "none")

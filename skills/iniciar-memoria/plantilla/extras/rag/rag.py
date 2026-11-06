@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: LicenseRef-Proprietary — Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 # Copyright (c) 2026 alejandro-xoxo
-"""Busqueda semantica local (RAG) sobre el vault de Obsidian y los docs del proyecto.
+"""Local semantic search (RAG) over the Obsidian vault and the project's docs.
 
-Todo ocurre en este equipo: el modelo de vectores se descarga una vez y nada sale a ninguna API.
+Everything happens on this machine: the vector model is downloaded once and nothing goes out to any API.
 
-Uso (con el Python del entorno de esta carpeta):
-  rag.py indexar             construye o actualiza el indice (solo recalcula lo que cambio)
-  rag.py buscar "pregunta"   muestra los mejores trozos, con archivo y lineas
-  rag.py servidor            servidor local que mantiene el modelo cargado y se reindexa solo
-  rag.py arrancar            arranca el servidor en segundo plano si no esta activo
-  rag.py parar               detiene el servidor
-  rag.py hook                lo llama el agente antes de cada mensaje: lee el mensaje por stdin y
-                             escribe por stdout el contexto recuperado (nada si no hay nada relevante)
-  rag.py ganchos             registra los ganchos en .claude/settings.local.json (mezcla, no pisa nada)
-  rag.py evaluar             mide la calidad de la busqueda con evaluacion.json
+Usage (with the Python of this folder's environment):
+  rag.py index              builds or updates the index (only recomputes what changed)
+  rag.py search "question"  shows the best chunks, with file and lines
+  rag.py server             local server that keeps the model loaded and reindexes by itself
+  rag.py start              starts the server in the background if it is not running
+  rag.py stop               stops the server
+  rag.py hook               called by the agent before every message: reads the message from stdin and
+                            writes the retrieved context to stdout (nothing if nothing is relevant)
+  rag.py hooks              registers the hooks in .claude/settings.local.json (merges, overwrites nothing)
+  rag.py evaluate           measures the search quality with evaluation.json
 
-Variables de entorno: RAG_DESACTIVAR=1 apaga la recuperacion automatica; RAG_UMBRAL, RAG_MODELO.
+Environment variables: RAG_DISABLE=1 turns off automatic retrieval; RAG_THRESHOLD, RAG_MODEL, RAG_MODELS_DIR, RAG_CURATED_WEIGHT.
+The older Spanish names (RAG_DESACTIVAR, RAG_UMBRAL, RAG_MODELO, RAG_MODELOS, RAG_PESO_CURADO) and the Spanish command names
+(indexar, buscar, servidor, arrancar, parar, ganchos, evaluar) are still accepted.
 """
 import hashlib
 import json
@@ -32,243 +34,258 @@ import urllib.request
 from collections import Counter
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent
-PROYECTO = RAIZ.parent
-INDICE = RAIZ / "indice"
-# El modelo (unos 0,6 GB) se comparte entre todos los proyectos para no descargarlo cada vez (RAG_MODELOS lo cambia)
-MODELOS = Path(os.environ.get("RAG_MODELOS") or (Path.home() / ".cache" / "rag-modelos"))
-ARCHIVO_SERVIDOR = RAIZ / "servidor.json"
-MODELO = os.environ.get("RAG_MODELO", "jinaai/jina-embeddings-v2-base-es")
-UMBRAL = float(os.environ.get("RAG_UMBRAL", "0.50"))   # similitud minima para inyectar contexto (ajustado con evaluar)
-# Lo curado manda sobre el material crudo: en la fusion, sus resultados pesan mas (ajustable con RAG_PESO_CURADO)
-PESO_CURADO = float(os.environ.get("RAG_PESO_CURADO", "1.25"))
-PESO_TIPO = {"nota curada": PESO_CURADO, "estado del proyecto": PESO_CURADO, "fuente cruda": 1.0}
-K = 4                      # trozos que se devuelven
-MAX_TROZO = 1500           # caracteres por trozo
-MAX_CONTEXTO = 3200        # caracteres maximos que se inyectan en cada mensaje
-INACTIVIDAD = 30 * 60      # el servidor se apaga solo tras 30 minutos sin uso
 
-PARADA = set("""a al algo como con cual cuales cuando de del el ella ellas ellos en entre era es esta estan este esto
+def env(*names, default=None):
+    """First environment variable that is set among `names` (new English name first, older Spanish name after)."""
+    for n in names:
+        v = os.environ.get(n)
+        if v:
+            return v
+    return default
+
+
+ROOT = Path(__file__).resolve().parent
+PROJECT = ROOT.parent
+INDEX = ROOT / "index"
+# The model (about 0.6 GB) is shared among all projects so it is not downloaded every time (RAG_MODELS_DIR changes it)
+_cache = Path.home() / ".cache"
+MODELS = Path(env("RAG_MODELS_DIR", "RAG_MODELOS") or (_cache / "rag-modelos" if (_cache / "rag-modelos").exists() and not (_cache / "rag-models").exists() else _cache / "rag-models"))
+SERVER_FILE = ROOT / "server.json"
+MODEL = env("RAG_MODEL", "RAG_MODELO", default="jinaai/jina-embeddings-v2-base-es")
+THRESHOLD = float(env("RAG_THRESHOLD", "RAG_UMBRAL", default="0.50"))   # minimum similarity to inject context (tuned with evaluate)
+# Curated content outranks raw material: in the fusion, its results weigh more (adjustable with RAG_CURATED_WEIGHT)
+CURATED_WEIGHT = float(env("RAG_CURATED_WEIGHT", "RAG_PESO_CURADO", default="1.25"))
+KIND_WEIGHT = {"curated note": CURATED_WEIGHT, "project state": CURATED_WEIGHT, "raw source": 1.0}
+K = 4                      # chunks returned
+MAX_CHUNK = 1500           # characters per chunk
+MAX_CONTEXT = 3200         # maximum characters injected in each message
+IDLE = 30 * 60             # the server shuts itself down after 30 minutes without use
+
+# Words ignored by the keyword search (Spanish and English; the default model understands both languages)
+STOPWORDS = set("""a al algo como con cual cuales cuando de del el ella ellas ellos en entre era es esta estan este esto
 estos fue ha han hay la las le les lo los me mi mas mucho muy no nos o para pero por que se si sin sobre su sus te tu
-un una uno unos y ya yo""".split())
+un una uno unos y ya yo
+about after all also an and any are as at be been but by can did do does for from had has have how if in into is it its
+may more most no not of on or our so some such than that the their then there these they this to was we were what when
+where which who why will with would you your""".split())
 
 
-# ---------------------------------------------------------------- fuentes
-def ruta_vault():
-    agentes = PROYECTO / "AGENTS.md"
-    if not agentes.exists():
-        sys.exit("No encuentro AGENTS.md en la carpeta del proyecto: ahi esta la ruta del vault (bloque ## Memoria).")
-    m = re.search(r"Vault de Obsidian:\s*`([^`]+)`", agentes.read_text(encoding="utf-8"))
+# ---------------------------------------------------------------- sources
+def vault_path():
+    agents = PROJECT / "AGENTS.md"
+    if not agents.exists():
+        sys.exit("Cannot find AGENTS.md in the project folder: that is where the vault path is (the ## Memory block).")
+    m = re.search(r"(?:Obsidian vault|Vault de Obsidian):\s*`([^`]+)`", agents.read_text(encoding="utf-8"))
     if not m:
-        sys.exit("AGENTS.md no tiene la linea 'Vault de Obsidian: `ruta`' en el bloque ## Memoria.")
+        sys.exit("AGENTS.md has no 'Obsidian vault: `path`' line in the ## Memory block.")
     vault = Path(m.group(1))
-    if not vault.is_absolute():       # en la plantilla el vault es la carpeta local "conocimiento/"
-        vault = PROYECTO / vault
+    if not vault.is_absolute():       # in the template the vault is the local "knowledge/" folder
+        vault = PROJECT / vault
     if not vault.is_dir():
-        sys.exit(f"El vault no existe en esta ruta: {vault}")
+        sys.exit(f"The vault does not exist at this path: {vault}")
     return vault
 
 
-def listar_fuentes():
-    """(ruta, etiqueta, tipo). Las carpetas cuyo nombre contiene 'fuentes' son material crudo."""
-    vault = ruta_vault()
-    fuentes = []
+def list_sources():
+    """(path, label, kind). Folders whose name contains 'sources' (or 'fuentes') are raw material."""
+    vault = vault_path()
+    sources = []
     for f in sorted(vault.rglob("*.md")):
         rel = f.relative_to(vault)
         if ".obsidian" in rel.parts:
             continue
-        crudo = any("fuentes" in p.lower() for p in rel.parts[:-1])
-        fuentes.append((f, "vault/" + rel.as_posix(), "fuente cruda" if crudo else "nota curada"))
-    for nombre in ("ESTADO.md", "DECISIONS.md"):
-        f = PROYECTO / "docs" / nombre
+        raw = any(("sources" in p.lower() or "fuentes" in p.lower()) for p in rel.parts[:-1])
+        sources.append((f, "vault/" + rel.as_posix(), "raw source" if raw else "curated note"))
+    for name in ("STATE.md", "ESTADO.md", "DECISIONS.md"):
+        f = PROJECT / "docs" / name
         if f.exists():
-            fuentes.append((f, "docs/" + nombre, "estado del proyecto"))
-    return fuentes
+            sources.append((f, "docs/" + name, "project state"))
+    return sources
 
 
-def leer(f):
+def read(f):
     return f.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
 
 
-# ---------------------------------------------------------------- troceado
-ENCABEZADO = re.compile(r"^(#{1,3})\s+(.*\S)\s*$")
-ROL = re.compile(r"^\*\*(Usuario|Claude)\*\*\s*$")
+# ---------------------------------------------------------------- chunking
+HEADING = re.compile(r"^(#{1,3})\s+(.*\S)\s*$")
+ROLE = re.compile(r"^\*\*(User|Usuario|Claude|Assistant)\*\*\s*$")
 
 
-def quitar_frontmatter(lineas):
-    if lineas and lineas[0].strip() == "---":
-        for i in range(1, len(lineas)):
-            if lineas[i].strip() == "---":
+def skip_frontmatter(lines):
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() == "---":
                 return i + 1
     return 0
 
 
-def bloques_por_encabezado(lineas, ini, nota):
-    bloques, actual, titulo = [], None, nota
-    for n in range(ini, len(lineas)):
-        m = ENCABEZADO.match(lineas[n])
-        if m and actual is not None:
-            bloques.append(actual)
-            actual = None
+def blocks_by_heading(lines, start, note):
+    blocks, current, title = [], None, note
+    for n in range(start, len(lines)):
+        m = HEADING.match(lines[n])
+        if m and current is not None:
+            blocks.append(current)
+            current = None
         if m:
-            titulo = m.group(2) if len(m.group(1)) == 1 else f"{nota} > {m.group(2)}"
-        if actual is None:
-            actual = [n + 1, titulo, []]
-        actual[2].append(lineas[n])
-    if actual:
-        bloques.append(actual)
-    return [(b[0], b[0] + len(b[2]) - 1, b[1], "\n".join(b[2])) for b in bloques if any(x.strip() for x in b[2])]
+            title = m.group(2) if len(m.group(1)) == 1 else f"{note} > {m.group(2)}"
+        if current is None:
+            current = [n + 1, title, []]
+        current[2].append(lines[n])
+    if current:
+        blocks.append(current)
+    return [(b[0], b[0] + len(b[2]) - 1, b[1], "\n".join(b[2])) for b in blocks if any(x.strip() for x in b[2])]
 
 
-def bloques_por_separador(lineas, ini, nombre):
-    """Material crudo (conversaciones): los turnos se separan con una linea '---'."""
-    bruto, actual, l0 = [], [], ini + 1
-    for n in range(ini, len(lineas)):
-        if lineas[n].strip() == "---":
-            if any(x.strip() for x in actual):
-                bruto.append((l0, n, actual))
-            actual, l0 = [], n + 2
+def blocks_by_separator(lines, start, name):
+    """Raw material (conversations): turns are separated by a '---' line."""
+    rough, current, l0 = [], [], start + 1
+    for n in range(start, len(lines)):
+        if lines[n].strip() == "---":
+            if any(x.strip() for x in current):
+                rough.append((l0, n, current))
+            current, l0 = [], n + 2
         else:
-            actual.append(lineas[n])
-    if any(x.strip() for x in actual):
-        bruto.append((l0, len(lineas), actual))
-    salida = []
-    for a, b, ls in bruto:
-        rol = next((ROL.match(x).group(1) for x in ls if ROL.match(x)), None)
-        salida.append((a, b, nombre + (f" ({rol})" if rol else ""), "\n".join(ls)))
-    return salida
+            current.append(lines[n])
+    if any(x.strip() for x in current):
+        rough.append((l0, len(lines), current))
+    out = []
+    for a, b, ls in rough:
+        role = next((ROLE.match(x).group(1) for x in ls if ROLE.match(x)), None)
+        out.append((a, b, name + (f" ({role})" if role else ""), "\n".join(ls)))
+    return out
 
 
-def empaquetar(bloques, llenar, minimo=350, maximo=MAX_TROZO):
-    """Parte los bloques enormes y une los pequenos. Con llenar=True junta turnos seguidos hasta el maximo."""
-    piezas = []
-    for a, b, tit, txt in bloques:
-        if len(txt) <= maximo:
-            piezas.append((a, b, tit, txt))
+def pack(blocks, fill, minimum=350, maximum=MAX_CHUNK):
+    """Splits huge blocks and joins small ones. With fill=True it joins consecutive turns up to the maximum."""
+    pieces = []
+    for a, b, tit, txt in blocks:
+        if len(txt) <= maximum:
+            pieces.append((a, b, tit, txt))
             continue
-        buf, n0, tam = [], a, 0
-        for i, linea in enumerate(txt.split("\n")):
-            if tam + len(linea) + 1 > maximo and buf:
-                piezas.append((n0, a + i - 1, tit, "\n".join(buf)))
-                buf, n0, tam = [], a + i, 0
-            while len(linea) > maximo:
-                piezas.append((a + i, a + i, tit, linea[:maximo]))
-                linea = linea[maximo:]
-            buf.append(linea)
-            tam += len(linea) + 1
+        buf, n0, size = [], a, 0
+        for i, line in enumerate(txt.split("\n")):
+            if size + len(line) + 1 > maximum and buf:
+                pieces.append((n0, a + i - 1, tit, "\n".join(buf)))
+                buf, n0, size = [], a + i, 0
+            while len(line) > maximum:
+                pieces.append((a + i, a + i, tit, line[:maximum]))
+                line = line[maximum:]
+            buf.append(line)
+            size += len(line) + 1
         if buf:
-            piezas.append((n0, b, tit, "\n".join(buf)))
-    salida = []
-    for p in piezas:
-        if salida:
-            q = salida[-1]
-            junta = len(q[3]) + len(p[3]) + 1 <= maximo
-            if junta and (llenar or len(q[3]) < minimo):
-                salida[-1] = (q[0], p[1], q[2], q[3] + "\n" + p[3])
+            pieces.append((n0, b, tit, "\n".join(buf)))
+    out = []
+    for p in pieces:
+        if out:
+            q = out[-1]
+            joined = len(q[3]) + len(p[3]) + 1 <= maximum
+            if joined and (fill or len(q[3]) < minimum):
+                out[-1] = (q[0], p[1], q[2], q[3] + "\n" + p[3])
                 continue
-        salida.append(p)
-    return salida
+        out.append(p)
+    return out
 
 
-def trocear(texto, tipo, nombre):
-    lineas = texto.split("\n")
-    ini = quitar_frontmatter(lineas)
-    if tipo == "fuente cruda":
-        return empaquetar(bloques_por_separador(lineas, ini, nombre), llenar=True)
-    return empaquetar(bloques_por_encabezado(lineas, ini, nombre), llenar=False)
+def chunk(text, kind, name):
+    lines = text.split("\n")
+    start = skip_frontmatter(lines)
+    if kind == "raw source":
+        return pack(blocks_by_separator(lines, start, name), fill=True)
+    return pack(blocks_by_heading(lines, start, name), fill=False)
 
 
-# ---------------------------------------------------------------- vectores
-_modelo = None
+# ---------------------------------------------------------------- vectors
+_model = None
 
 
-def modelo():
-    global _modelo
-    if _modelo is None:
+def model():
+    global _model
+    if _model is None:
         from fastembed import TextEmbedding
-        MODELOS.mkdir(exist_ok=True)
-        _modelo = TextEmbedding(MODELO, cache_dir=str(MODELOS))
-    return _modelo
+        MODELS.mkdir(parents=True, exist_ok=True)
+        _model = TextEmbedding(MODEL, cache_dir=str(MODELS))
+    return _model
 
 
-def embeber(textos):
+def embed(texts):
     import numpy as np
-    v = np.array(list(modelo().embed(textos)), dtype=np.float32)
+    v = np.array(list(model().embed(texts)), dtype=np.float32)
     n = np.linalg.norm(v, axis=1, keepdims=True)
     n[n == 0] = 1
     return v / n
 
 
-def texto_vectorizable(t):
-    return f"{t['titulo']}\n{t['texto']}"
+def vectorizable_text(t):
+    return f"{t['title']}\n{t['text']}"
 
 
-# ---------------------------------------------------------------- indice
-def leer_indice():
+# ---------------------------------------------------------------- index
+def read_index():
     import numpy as np
     try:
-        estado = json.loads((INDICE / "estado.json").read_text(encoding="utf-8"))
-        trozos = json.loads((INDICE / "trozos.json").read_text(encoding="utf-8"))
-        vectores = np.load(INDICE / "vectores.npy")
-        if len(trozos) != len(vectores):
-            raise ValueError("indice incoherente")
-        return estado, trozos, vectores
+        state = json.loads((INDEX / "state.json").read_text(encoding="utf-8"))
+        chunks = json.loads((INDEX / "chunks.json").read_text(encoding="utf-8"))
+        vectors = np.load(INDEX / "vectors.npy")
+        if len(chunks) != len(vectors):
+            raise ValueError("inconsistent index")
+        return state, chunks, vectors
     except (OSError, ValueError, KeyError):
         return None
 
 
-def guardar_indice(estado, trozos, vectores):
+def save_index(state, chunks, vectors):
     import numpy as np
-    INDICE.mkdir(parents=True, exist_ok=True)
-    for nombre, contenido in (("trozos.json", json.dumps(trozos, ensure_ascii=False)),
-                              ("estado.json", json.dumps(estado, ensure_ascii=False, indent=1))):
-        tmp = INDICE / (nombre + ".tmp")
-        tmp.write_text(contenido, encoding="utf-8")
-        os.replace(tmp, INDICE / nombre)
-    tmp = INDICE / "vectores.tmp.npy"
-    np.save(tmp, vectores)
-    os.replace(tmp, INDICE / "vectores.npy")
+    INDEX.mkdir(parents=True, exist_ok=True)
+    for name, content in (("chunks.json", json.dumps(chunks, ensure_ascii=False)),
+                          ("state.json", json.dumps(state, ensure_ascii=False, indent=1))):
+        tmp = INDEX / (name + ".tmp")
+        tmp.write_text(content, encoding="utf-8")
+        os.replace(tmp, INDEX / name)
+    tmp = INDEX / "vectors.tmp.npy"
+    np.save(tmp, vectors)
+    os.replace(tmp, INDEX / "vectors.npy")
 
 
-def indexar(hablar=False):
-    """Incremental: reutiliza los vectores de los archivos que no cambiaron."""
+def build_index(talk=False):
+    """Incremental: reuses the vectors of the files that did not change."""
     import numpy as np
-    previo = leer_indice()
-    previos = {}
-    if previo and previo[0].get("modelo") == MODELO:
-        for i, t in enumerate(previo[1]):
-            previos.setdefault(t["archivo"], []).append(i)
-    resultado, hashes, reutilizados, nuevos = [], {}, 0, 0
-    for f, etiqueta, tipo in listar_fuentes():
-        texto = leer(f)
-        h = hashlib.sha1(texto.encode("utf-8")).hexdigest()
-        hashes[etiqueta] = h
-        if previo and previo[0]["archivos"].get(etiqueta) == h and etiqueta in previos:
-            for i in previos[etiqueta]:
-                resultado.append([previo[1][i], previo[2][i]])
-                reutilizados += 1
+    previous = read_index()
+    previous_by_file = {}
+    if previous and previous[0].get("model") == MODEL:
+        for i, t in enumerate(previous[1]):
+            previous_by_file.setdefault(t["file"], []).append(i)
+    result, hashes, reused, new = [], {}, 0, 0
+    for f, label, kind in list_sources():
+        text = read(f)
+        h = hashlib.sha1(text.encode("utf-8")).hexdigest()
+        hashes[label] = h
+        if previous and previous[0]["files"].get(label) == h and label in previous_by_file:
+            for i in previous_by_file[label]:
+                result.append([previous[1][i], previous[2][i]])
+                reused += 1
             continue
-        for a, b, tit, txt in trocear(texto, tipo, f.stem):
-            resultado.append([{"archivo": etiqueta, "ini": a, "fin": b, "titulo": tit, "tipo": tipo, "texto": txt}, None])
-            nuevos += 1
-    pendientes = [i for i, (_, v) in enumerate(resultado) if v is None]
-    if pendientes:
-        if hablar:
-            print(f"Calculando vectores de {len(pendientes)} trozos (la primera vez descarga el modelo)...", flush=True)
-        vs = embeber([texto_vectorizable(resultado[i][0]) for i in pendientes])
-        for j, i in enumerate(pendientes):
-            resultado[i][1] = vs[j]
-    if not resultado:
-        sys.exit("No hay nada que indexar.")
-    guardar_indice({"modelo": MODELO, "archivos": hashes}, [t for t, _ in resultado], np.vstack([v for _, v in resultado]))
-    return {"archivos": len(hashes), "trozos": len(resultado), "nuevos": nuevos, "reutilizados": reutilizados}
+        for a, b, tit, txt in chunk(text, kind, f.stem):
+            result.append([{"file": label, "start": a, "end": b, "title": tit, "kind": kind, "text": txt}, None])
+            new += 1
+    pending = [i for i, (_, v) in enumerate(result) if v is None]
+    if pending:
+        if talk:
+            print(f"Computing vectors for {len(pending)} chunks (the first time it downloads the model)...", flush=True)
+        vs = embed([vectorizable_text(result[i][0]) for i in pending])
+        for j, i in enumerate(pending):
+            result[i][1] = vs[j]
+    if not result:
+        sys.exit("There is nothing to index.")
+    save_index({"model": MODEL, "files": hashes}, [t for t, _ in result], np.vstack([v for _, v in result]))
+    return {"files": len(hashes), "chunks": len(result), "new": new, "reused": reused}
 
 
-# ---------------------------------------------------------------- busqueda
+# ---------------------------------------------------------------- search
 def tokens(t):
     t = unicodedata.normalize("NFD", t.lower())
     t = "".join(c for c in t if unicodedata.category(c) != "Mn")
-    return [w for w in re.findall(r"[a-z0-9]+", t) if len(w) > 1 and w not in PARADA]
+    return [w for w in re.findall(r"[a-z0-9]+", t) if len(w) > 1 and w not in STOPWORDS]
 
 
 class BM25:
@@ -277,394 +294,400 @@ class BM25:
         self.np = np
         self.tf = [Counter(d) for d in docs]
         self.n = len(docs)
-        self.largo = np.array([len(d) for d in docs], dtype=np.float32)
-        self.medio = float(self.largo.mean()) or 1.0
+        self.length = np.array([len(d) for d in docs], dtype=np.float32)
+        self.mean = float(self.length.mean()) or 1.0
         df = Counter()
         for tf in self.tf:
             df.update(tf.keys())
         self.idf = {t: math.log(1 + (self.n - c + 0.5) / (c + 0.5)) for t, c in df.items()}
 
-    def puntuar(self, consulta):
+    def score(self, query):
         s = self.np.zeros(self.n, dtype=self.np.float32)
-        for t in set(consulta):
+        for t in set(query):
             idf = self.idf.get(t)
             if idf is None:
                 continue
             for i, tf in enumerate(self.tf):
                 f = tf.get(t, 0)
                 if f:
-                    s[i] += idf * f * 2.5 / (f + 1.5 * (0.25 + 0.75 * self.largo[i] / self.medio))
+                    s[i] += idf * f * 2.5 / (f + 1.5 * (0.25 + 0.75 * self.length[i] / self.mean))
         return s
 
 
-class Indice:
-    def __init__(self, trozos, vectores):
-        self.trozos, self.vectores = trozos, vectores
-        self.bm25 = BM25([tokens(t["titulo"] + " " + t["texto"]) for t in trozos])
+class Index:
+    def __init__(self, chunks, vectors):
+        self.chunks, self.vectors = chunks, vectors
+        self.bm25 = BM25([tokens(t["title"] + " " + t["text"]) for t in chunks])
 
-    def puntuaciones(self, consulta):
-        sem = self.vectores @ embeber([consulta])[0]
-        kw = self.bm25.puntuar(tokens(consulta))
+    def scores(self, query):
+        sem = self.vectors @ embed([query])[0]
+        kw = self.bm25.score(tokens(query))
         return sem, kw
 
-    def buscar(self, consulta, k=K, modo="hibrido", max_por_archivo=2):
+    def search(self, query, k=K, mode="hybrid", max_per_file=2):
         import numpy as np
-        sem, kw = self.puntuaciones(consulta)
-        if modo == "semantico":
-            orden = list(np.argsort(-sem))
-        elif modo == "palabras":
-            orden = [i for i in np.argsort(-kw) if kw[i] > 0]
-        else:  # fusion por rangos (RRF)
-            fus = Counter()
+        sem, kw = self.scores(query)
+        if mode == "semantic":
+            order = list(np.argsort(-sem))
+        elif mode == "keywords":
+            order = [i for i in np.argsort(-kw) if kw[i] > 0]
+        else:  # rank fusion (RRF)
+            fused = Counter()
             for r, i in enumerate(np.argsort(-sem)[:60]):
-                fus[int(i)] += 1 / (60 + r)
+                fused[int(i)] += 1 / (60 + r)
             for r, i in enumerate([i for i in np.argsort(-kw)[:60] if kw[i] > 0]):
-                fus[int(i)] += 1 / (60 + r)
-            for i in fus:
-                fus[i] *= PESO_TIPO.get(self.trozos[i]["tipo"], 1.0)
-            orden = [i for i, _ in fus.most_common()]
-        salida, por_archivo, sem_max = [], Counter(), float(sem.max())
-        for i in orden:
-            t = self.trozos[int(i)]
-            if por_archivo[t["archivo"]] >= max_por_archivo:
+                fused[int(i)] += 1 / (60 + r)
+            for i in fused:
+                fused[i] *= KIND_WEIGHT.get(self.chunks[i]["kind"], 1.0)
+            order = [i for i, _ in fused.most_common()]
+        out, per_file, sem_max = [], Counter(), float(sem.max())
+        for i in order:
+            t = self.chunks[int(i)]
+            if per_file[t["file"]] >= max_per_file:
                 continue
-            por_archivo[t["archivo"]] += 1
-            salida.append(dict(t, sem=float(sem[i]), kw=float(kw[i]), sem_max=sem_max))
-            if len(salida) >= k:
+            per_file[t["file"]] += 1
+            out.append(dict(t, sem=float(sem[i]), kw=float(kw[i]), sem_max=sem_max))
+            if len(out) >= k:
                 break
-        return salida
+        return out
 
 
-def indice_en_memoria():
-    previo = leer_indice()
-    if not previo or previo[0].get("modelo") != MODELO:
-        indexar(hablar=True)
-        previo = leer_indice()
-    return Indice(previo[1], previo[2])
+def index_in_memory():
+    previous = read_index()
+    if not previous or previous[0].get("model") != MODEL:
+        build_index(talk=True)
+        previous = read_index()
+    return Index(previous[1], previous[2])
 
 
-def formatear(resultados):
-    cab = ("[Contexto recuperado automaticamente del vault y de docs/ por busqueda semantica local. Puede estar "
-           "incompleto o desactualizado: verificalo en la fuente citada antes de usarlo, e ignoralo si no es relevante.]")
-    partes, total = [cab], 0
-    for n, r in enumerate(resultados, 1):
-        ext = r["texto"].strip()
-        if len(ext) > 650:
-            ext = ext[:650].rsplit(" ", 1)[0] + " [...]"
-        bloque = f"{n}. {r['archivo']}:{r['ini']}-{r['fin']} ({r['tipo']}, similitud {r['sem']:.2f}) - {r['titulo']}\n{ext}"
-        if total + len(bloque) > MAX_CONTEXTO and n > 1:
+def format_results(results):
+    header = ("[Context retrieved automatically from the vault and from docs/ by local semantic search. It may be "
+              "incomplete or outdated: verify it in the cited source before using it, and ignore it if it is not relevant.]")
+    parts, total = [header], 0
+    for n, r in enumerate(results, 1):
+        excerpt = r["text"].strip()
+        if len(excerpt) > 650:
+            excerpt = excerpt[:650].rsplit(" ", 1)[0] + " [...]"
+        block = f"{n}. {r['file']}:{r['start']}-{r['end']} ({r['kind']}, similarity {r['sem']:.2f}) - {r['title']}\n{excerpt}"
+        if total + len(block) > MAX_CONTEXT and n > 1:
             break
-        partes.append(bloque)
-        total += len(bloque)
-    return "\n\n".join(partes)
+        parts.append(block)
+        total += len(block)
+    return "\n\n".join(parts)
 
 
-# ---------------------------------------------------------------- servidor
-class Motor:
-    """Mantiene el modelo y el indice en memoria, y se reindexa solo si cambia algun archivo."""
+# ---------------------------------------------------------------- server
+class Engine:
+    """Keeps the model and the index in memory, and reindexes by itself if any file changes."""
 
     def __init__(self):
         self.lock = threading.Lock()
-        self.reindexando = False
-        self.cargar()
+        self.reindexing = False
+        self.load()
 
-    def firma(self):
-        return tuple((e, f.stat().st_mtime_ns, f.stat().st_size) for f, e, _ in listar_fuentes())
+    def signature(self):
+        return tuple((e, f.stat().st_mtime_ns, f.stat().st_size) for f, e, _ in list_sources())
 
-    def cargar(self):
-        # La firma se toma ANTES de indexar: si un archivo cambia mientras se indexa, la firma queda vieja
-        # y la siguiente busqueda dispara otra pasada, asi no se pierde ningun cambio.
-        firma = self.firma()
-        indexar()
-        previo = leer_indice()
-        nuevo = Indice(previo[1], previo[2])
+    def load(self):
+        # The signature is taken BEFORE indexing: if a file changes while indexing, the signature goes stale
+        # and the next search triggers another pass, so no change is ever lost.
+        signature = self.signature()
+        build_index()
+        previous = read_index()
+        fresh = Index(previous[1], previous[2])
         with self.lock:
-            self.indice, self.firma_actual = nuevo, firma
+            self.index, self.current_signature = fresh, signature
 
-    def reindexar_en_segundo_plano(self):
-        if self.reindexando:
+    def reindex_in_background(self):
+        if self.reindexing:
             return
-        self.reindexando = True
+        self.reindexing = True
 
-        def trabajo():
+        def work():
             try:
-                self.cargar()
+                self.load()
             except Exception as e:  # noqa: BLE001
-                print("Error al reindexar:", e, flush=True)
+                print("Error while reindexing:", e, flush=True)
             finally:
-                self.reindexando = False
+                self.reindexing = False
 
-        threading.Thread(target=trabajo, daemon=True).start()
+        threading.Thread(target=work, daemon=True).start()
 
-    def buscar(self, consulta, k):
-        # Si cambio algun archivo, se reindexa aparte y mientras tanto se contesta con el indice anterior:
-        # una busqueda nunca espera a un reindexado (el cambio se ve unos segundos despues).
-        if self.firma() != self.firma_actual:
-            self.reindexar_en_segundo_plano()
+    def search(self, query, k):
+        # If a file changed, it is reindexed separately and meanwhile the previous index answers:
+        # a search never waits for a reindex (the change shows up a few seconds later).
+        if self.signature() != self.current_signature:
+            self.reindex_in_background()
         with self.lock:
-            indice = self.indice
-        return indice.buscar(consulta, k)
+            index = self.index
+        return index.search(query, k)
 
 
-def servidor():
+def server():
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     import secrets
-    if sys.stdout is None or sys.stderr is None:      # arrancado sin consola (pythonw): el registro va a un archivo
-        registro = open(RAIZ / "servidor.log", "a", buffering=1, encoding="utf-8")
-        sys.stdout = sys.stderr = registro
-    if ARCHIVO_SERVIDOR.exists():
-        ARCHIVO_SERVIDOR.unlink()
-    motor = Motor()
-    embeber(["calentamiento"])   # carga el modelo ahora: servidor.json solo aparece cuando de verdad esta listo
+    if sys.stdout is None or sys.stderr is None:      # started without a console (pythonw): the log goes to a file
+        log = open(ROOT / "server.log", "a", buffering=1, encoding="utf-8")
+        sys.stdout = sys.stderr = log
+    if SERVER_FILE.exists():
+        SERVER_FILE.unlink()
+    engine = Engine()
+    embed(["warm-up"])   # loads the model now: server.json only appears when it is really ready
     token = secrets.token_hex(16)
-    ultimo = [time.time()]
+    last = [time.time()]
 
-    class Manejador(BaseHTTPRequestHandler):
+    class Handler(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
 
         def do_POST(self):
-            crudo = self.rfile.read(int(self.headers.get("Content-Length", 0)))   # siempre se lee el cuerpo antes de responder
-            if self.headers.get("X-Token") != token or self.path != "/buscar":
+            raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))   # the body is always read before answering
+            if self.headers.get("X-Token") != token or self.path != "/search":
                 self.send_response(403)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
                 return
             try:
-                datos = json.loads(crudo.decode("utf-8"))
-                cuerpo = json.dumps(motor.buscar(datos["consulta"], int(datos.get("k", K))), ensure_ascii=False).encode("utf-8")
+                data = json.loads(raw.decode("utf-8"))
+                body = json.dumps(engine.search(data["query"], int(data.get("k", K))), ensure_ascii=False).encode("utf-8")
                 self.send_response(200)
             except Exception as e:  # noqa: BLE001
-                cuerpo = json.dumps({"error": str(e)}).encode("utf-8")
+                body = json.dumps({"error": str(e)}).encode("utf-8")
                 self.send_response(500)
-            ultimo[0] = time.time()
+            last[0] = time.time()
             self.send_header("Content-Type", "application/json; charset=utf-8")
             try:
-                self.send_header("Content-Length", str(len(cuerpo)))
+                self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
-                self.wfile.write(cuerpo)
+                self.wfile.write(body)
             except OSError:
-                pass   # el cliente ya cerro la conexion (por ejemplo, por su limite de espera)
+                pass   # the client already closed the connection (for example, because of its timeout)
 
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), Manejador)   # solo accesible desde este equipo
-    ARCHIVO_SERVIDOR.write_text(json.dumps({"puerto": srv.server_address[1], "token": token, "pid": os.getpid()}), encoding="utf-8")
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), Handler)   # reachable only from this machine
+    SERVER_FILE.write_text(json.dumps({"port": srv.server_address[1], "token": token, "pid": os.getpid()}), encoding="utf-8")
 
-    def vigilar():
-        while time.time() - ultimo[0] < INACTIVIDAD:
+    def watch():
+        while time.time() - last[0] < IDLE:
             time.sleep(30)
-        ARCHIVO_SERVIDOR.unlink(missing_ok=True)
+        SERVER_FILE.unlink(missing_ok=True)
         os._exit(0)
 
-    threading.Thread(target=vigilar, daemon=True).start()
-    print(f"Servidor listo en 127.0.0.1:{srv.server_address[1]}", flush=True)
+    threading.Thread(target=watch, daemon=True).start()
+    print(f"Server ready on 127.0.0.1:{srv.server_address[1]}", flush=True)
     try:
         srv.serve_forever()
     finally:
-        ARCHIVO_SERVIDOR.unlink(missing_ok=True)
+        SERVER_FILE.unlink(missing_ok=True)
 
 
-def consultar_servidor(consulta, k=K, espera=3.0):
+def query_server(query, k=K, wait=3.0):
     try:
-        datos = json.loads(ARCHIVO_SERVIDOR.read_text(encoding="utf-8"))
+        data = json.loads(SERVER_FILE.read_text(encoding="utf-8"))
         req = urllib.request.Request(
-            f"http://127.0.0.1:{datos['puerto']}/buscar",
-            data=json.dumps({"consulta": consulta, "k": k}).encode("utf-8"),
-            headers={"X-Token": datos["token"], "Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=espera) as r:
+            f"http://127.0.0.1:{data['port']}/search",
+            data=json.dumps({"query": query, "k": k}).encode("utf-8"),
+            headers={"X-Token": data["token"], "Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=wait) as r:
             return json.loads(r.read().decode("utf-8"))
     except Exception:  # noqa: BLE001
         return None
 
 
-def servidor_vivo():
-    return consultar_servidor("ping", 1, espera=2.0) is not None
+def server_alive():
+    return query_server("ping", 1, wait=2.0) is not None
 
 
-def arrancar():
-    if servidor_vivo():
+def start():
+    if server_alive():
         return False
-    RAIZ.mkdir(exist_ok=True)
+    ROOT.mkdir(exist_ok=True)
     script = str(Path(__file__).resolve())
     if os.name == "nt":
-        # Un servidor lanzado desde un gancho moria al terminar el gancho (el agente cierra su arbol de procesos).
-        # Un proceso creado por WMI no cuelga del que lo lanza, asi que sobrevive. Con pythonw no abre ventana.
-        sin_consola = Path(sys.executable).with_name("pythonw.exe")
-        exe = str(sin_consola if sin_consola.exists() else sys.executable)
+        # A server launched from a hook used to die when the hook ended (the agent kills its process tree).
+        # A process created through WMI does not hang from whoever launched it, so it survives. With pythonw it opens no window.
+        no_console = Path(sys.executable).with_name("pythonw.exe")
+        exe = str(no_console if no_console.exists() else sys.executable)
         ps = ("$si = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ShowWindow=[uint16]0}; "
               "$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments "
               "@{CommandLine=$env:RAG_CMD; CurrentDirectory=$env:RAG_DIR; ProcessStartupInformation=$si}; "
               "exit ([int]($r.ReturnValue -ne 0))")
-        entorno = dict(os.environ, RAG_CMD=f'"{exe}" "{script}" servidor', RAG_DIR=str(RAIZ))
+        environment = dict(os.environ, RAG_CMD=f'"{exe}" "{script}" server', RAG_DIR=str(ROOT))
         try:
-            if subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps], env=entorno,
+            if subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps], env=environment,
                               capture_output=True, timeout=30).returncode == 0:
                 return True
         except (OSError, subprocess.SubprocessError):
-            pass   # si WMI no esta disponible, se usa el metodo normal de abajo
-    registro = open(RAIZ / "servidor.log", "ab")
-    banderas = 0x00000008 | 0x00000200 if os.name == "nt" else 0   # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    subprocess.Popen([sys.executable, script, "servidor"], stdin=subprocess.DEVNULL,
-                     stdout=registro, stderr=registro, creationflags=banderas, close_fds=True)
+            pass   # if WMI is not available, the normal method below is used
+    log = open(ROOT / "server.log", "ab")
+    flags = 0x00000008 | 0x00000200 if os.name == "nt" else 0   # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([sys.executable, script, "server"], stdin=subprocess.DEVNULL,
+                     stdout=log, stderr=log, creationflags=flags, close_fds=True)
     return True
 
 
-def parar():
+def stop():
     try:
-        pid = json.loads(ARCHIVO_SERVIDOR.read_text(encoding="utf-8"))["pid"]
+        pid = json.loads(SERVER_FILE.read_text(encoding="utf-8"))["pid"]
     except (OSError, ValueError, KeyError):
-        print("El servidor no esta activo.")
+        print("The server is not running.")
         return
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True)
     else:
         os.kill(pid, 15)
-    ARCHIVO_SERVIDOR.unlink(missing_ok=True)
-    print("Servidor detenido.")
+    SERVER_FILE.unlink(missing_ok=True)
+    print("Server stopped.")
 
 
-# ---------------------------------------------------------------- gancho del agente
-def gancho():
+# ---------------------------------------------------------------- the agent's hook
+def hook():
     sys.stdin.reconfigure(encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")
-    if os.environ.get("RAG_DESACTIVAR") == "1":
+    if env("RAG_DISABLE", "RAG_DESACTIVAR") == "1":
         return
     try:
-        mensaje = (json.loads(sys.stdin.read()).get("prompt") or "").strip()
+        message = (json.loads(sys.stdin.read()).get("prompt") or "").strip()
     except (ValueError, AttributeError):
         return
-    if len(mensaje) < 15 or mensaje.startswith("/"):
+    if len(message) < 15 or message.startswith("/"):
         return
-    if re.search(r"<task-notification>|\[SYSTEM NOTIFICATION", mensaje):
-        return                            # avisos automaticos del sistema, no preguntas del usuario
-    resultados = None
-    for intento in range(6):              # nunca retrasa un mensaje mas de ~3 s: si el servidor arranca ahora, este mensaje va sin contexto
-        resultados = consultar_servidor(mensaje, K)
-        if resultados is not None:
+    if re.search(r"<task-notification>|\[SYSTEM NOTIFICATION", message):
+        return                            # automatic system notices, not questions from the user
+    results = None
+    for attempt in range(6):              # never delays a message by more than ~3 s: if the server is starting now, this message goes without context
+        results = query_server(message, K)
+        if results is not None:
             break
-        if intento == 0:
-            arrancar()
+        if attempt == 0:
+            start()
         time.sleep(0.5)
-    if not isinstance(resultados, list):
+    if not isinstance(results, list):
         return
-    # El mensaje debe tratar de algo del vault (mejor trozo >= umbral); entonces se admiten los trozos algo mas flojos
-    # que traiga la fusion con palabras exactas (por ejemplo "marca 108").
-    if not resultados or resultados[0]["sem_max"] < UMBRAL:
+    # The message must be about something in the vault (best chunk >= threshold); then the somewhat weaker chunks
+    # that the exact-words fusion brings in (for example "brand 108") are admitted.
+    if not results or results[0]["sem_max"] < THRESHOLD:
         return
-    utiles = [r for r in resultados if r["sem"] >= UMBRAL - 0.10]
-    if utiles:
-        # Salida JSON documentada de los ganchos: additionalContext se inyecta en el contexto del modelo
+    useful = [r for r in results if r["sem"] >= THRESHOLD - 0.10]
+    if useful:
+        # Documented JSON output of the hooks: additionalContext is injected into the model's context
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                                                  "additionalContext": formatear(utiles)}}, ensure_ascii=False))
+                                                  "additionalContext": format_results(useful)}}, ensure_ascii=False))
 
 
-# ---------------------------------------------------------------- ganchos del agente
-def ganchos():
-    """Registra los ganchos en .claude/settings.local.json del proyecto. Mezcla con lo que ya haya y no lo duplica."""
-    destino = PROYECTO / ".claude" / "settings.local.json"
-    datos = {}
-    if destino.exists():
+# ---------------------------------------------------------------- registering the agent's hooks
+def register_hooks():
+    """Registers the hooks in the project's .claude/settings.local.json. Merges with what is already there and does not duplicate it."""
+    target = PROJECT / ".claude" / "settings.local.json"
+    data = {}
+    if target.exists():
         try:
-            datos = json.loads(destino.read_text(encoding="utf-8"))
+            data = json.loads(target.read_text(encoding="utf-8"))
         except ValueError:
-            sys.exit(f"{destino} no es un JSON valido: arreglalo o borralo antes. No lo toco.")
-        if not isinstance(datos, dict) or not isinstance(datos.get("hooks", {}), dict):
-            sys.exit(f"{destino} tiene una forma inesperada (se esperaba un objeto con 'hooks'). No lo toco.")
+            sys.exit(f"{target} is not valid JSON: fix or delete it first. I am not touching it.")
+        if not isinstance(data, dict) or not isinstance(data.get("hooks", {}), dict):
+            sys.exit(f"{target} has an unexpected shape (an object with 'hooks' was expected). I am not touching it.")
     py = Path(sys.executable).as_posix()
     rag = Path(__file__).resolve().as_posix()
-    nuevos = {"SessionStart": ("arrancar", 20, "Arrancando la búsqueda local del vault..."),
-              "UserPromptSubmit": ("hook", 15, "Buscando contexto en el vault...")}
-    hooks = datos.setdefault("hooks", {})
-    agregados = []
-    for evento, (argumento, limite, mensaje) in nuevos.items():
-        grupos = hooks.setdefault(evento, [])
-        ya = any(h.get("type") == "command" and h.get("args", [])[-2:] == [rag, argumento]
-                 for g in grupos for h in g.get("hooks", []))
-        if not ya:
-            grupos.append({"hooks": [{"type": "command", "command": py, "args": [rag, argumento],
-                                      "timeout": limite, "statusMessage": mensaje}]})
-            agregados.append(evento)
-    if not agregados:
-        print("Los ganchos ya estaban registrados en", destino)
+    new = {"SessionStart": ("start", 20, "Starting the local vault search..."),
+           "UserPromptSubmit": ("hook", 15, "Searching the vault for context...")}
+    hooks = data.setdefault("hooks", {})
+    added = []
+    for event, (argument, limit, message) in new.items():
+        groups = hooks.setdefault(event, [])
+        already = any(h.get("type") == "command" and h.get("args", [])[-2:] == [rag, argument]
+                      for g in groups for h in g.get("hooks", []))
+        if not already:
+            groups.append({"hooks": [{"type": "command", "command": py, "args": [rag, argument],
+                                      "timeout": limit, "statusMessage": message}]})
+            added.append(event)
+    if not added:
+        print("The hooks were already registered in", target)
         return
-    destino.parent.mkdir(exist_ok=True)
-    if destino.exists():
-        copia = destino.with_suffix(".json.bak")
-        copia.write_text(destino.read_text(encoding="utf-8"), encoding="utf-8")
-    destino.write_text(json.dumps(datos, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print("Ganchos registrados en", destino, "->", ", ".join(agregados))
-    print("Abre /hooks una vez o reinicia la sesion del agente para que se carguen.")
+    target.parent.mkdir(exist_ok=True)
+    if target.exists():
+        backup = target.with_suffix(".json.bak")
+        backup.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+    target.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("Hooks registered in", target, "->", ", ".join(added))
+    print("Open /hooks once or restart the agent session so they get loaded.")
 
 
-# ---------------------------------------------------------------- evaluacion
-def evaluar():
-    datos = json.loads((RAIZ / "evaluacion.json").read_text(encoding="utf-8"))
-    indice = indice_en_memoria()
-    pos, neg = datos["preguntas"], datos.get("negativas", [])
-    print(f"{len(indice.trozos)} trozos | {len(pos)} preguntas con respuesta conocida | {len(neg)} sin relacion\n")
-    print(f"{'modo':<10} {'acierto@1':>10} {'acierto@3':>10} {'acierto@5':>10} {'MRR':>7}")
-    for modo in ("palabras", "semantico", "hibrido"):
+# ---------------------------------------------------------------- evaluation
+def evaluate():
+    data = json.loads((ROOT / "evaluation.json").read_text(encoding="utf-8"))
+    index = index_in_memory()
+    pos, neg = data["questions"], data.get("negatives", [])
+    print(f"{len(index.chunks)} chunks | {len(pos)} questions with a known answer | {len(neg)} unrelated\n")
+    print(f"{'mode':<10} {'hit@1':>10} {'hit@3':>10} {'hit@5':>10} {'MRR':>7}")
+    for mode in ("keywords", "semantic", "hybrid"):
         a1 = a3 = a5 = 0
         mrr = 0.0
         for p in pos:
-            res = indice.buscar(p["p"], 5, modo, max_por_archivo=5)
-            rangos = [n for n, r in enumerate(res, 1) if any(r["archivo"].endswith(e) for e in p["esperado"])]
-            if rangos:
-                r = rangos[0]
+            res = index.search(p["q"], 5, mode, max_per_file=5)
+            ranks = [n for n, r in enumerate(res, 1) if any(r["file"].endswith(e) for e in p["expected"])]
+            if ranks:
+                r = ranks[0]
                 a1 += r <= 1
                 a3 += r <= 3
                 a5 += r <= 5
                 mrr += 1 / r
         n = len(pos)
-        print(f"{modo:<10} {a1 / n:>10.0%} {a3 / n:>10.0%} {a5 / n:>10.0%} {mrr / n:>7.2f}")
-    print("\nFallos del modo hibrido (esperado | lo que trajo primero):")
+        print(f"{mode:<10} {a1 / n:>10.0%} {a3 / n:>10.0%} {a5 / n:>10.0%} {mrr / n:>7.2f}")
+    print("\nMisses of the hybrid mode (expected | what it brought first):")
     for p in pos:
-        res = indice.buscar(p["p"], 3, "hibrido", max_por_archivo=3)
-        if not any(r["archivo"].endswith(e) for r in res for e in p["esperado"]):
-            print(f"  - {p['p']}\n      esperado: {p['esperado'][0]}\n      trajo: {[r['archivo'].split('/')[-1] for r in res]}")
-    sp = sorted(float(indice.puntuaciones(p["p"])[0].max()) for p in pos)
-    sn = sorted(float(indice.puntuaciones(q)[0].max()) for q in neg) if neg else []
-    print(f"\nSimilitud maxima (semantica): con respuesta en el vault min {sp[0]:.2f} | mediana {sp[len(sp) // 2]:.2f} | max {sp[-1]:.2f}")
+        res = index.search(p["q"], 3, "hybrid", max_per_file=3)
+        if not any(r["file"].endswith(e) for r in res for e in p["expected"]):
+            print(f"  - {p['q']}\n      expected: {p['expected'][0]}\n      brought: {[r['file'].split('/')[-1] for r in res]}")
+    sp = sorted(float(index.scores(p["q"])[0].max()) for p in pos)
+    sn = sorted(float(index.scores(q)[0].max()) for q in neg) if neg else []
+    print(f"\nMaximum similarity (semantic): with an answer in the vault min {sp[0]:.2f} | median {sp[len(sp) // 2]:.2f} | max {sp[-1]:.2f}")
     if sn:
-        print(f"                              sin relacion               min {sn[0]:.2f} | mediana {sn[len(sn) // 2]:.2f} | max {sn[-1]:.2f}")
-    print("\nSenales por pregunta (similitud maxima | palabras maxima):")
-    for etiqueta, qs in (("CON respuesta en el vault", [p["p"] for p in pos]), ("SIN relacion", neg)):
-        print(f"  {etiqueta}")
-        for q in sorted(qs, key=lambda q: float(indice.puntuaciones(q)[0].max())):
-            s, w = indice.puntuaciones(q)
+        print(f"                               unrelated                   min {sn[0]:.2f} | median {sn[len(sn) // 2]:.2f} | max {sn[-1]:.2f}")
+    print("\nSignals per question (maximum similarity | maximum keywords):")
+    for label, qs in (("WITH an answer in the vault", [p["q"] for p in pos]), ("UNRELATED", neg)):
+        print(f"  {label}")
+        for q in sorted(qs, key=lambda q: float(index.scores(q)[0].max())):
+            s, w = index.scores(q)
             print(f"    sem {float(s.max()):.2f} | kw {float(w.max()):5.1f} | {q[:68]}")
-    print("\numbral -> % de preguntas con respuesta que SI inyectan | % de preguntas sin relacion que inyectan (ruido)")
+    print("\nthreshold -> % of questions with an answer that DO inject | % of unrelated questions that inject (noise)")
     for u in (0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65):
         print(f"  {u:.2f}  -> {sum(s >= u for s in sp) / len(sp):>4.0%} | {(sum(s >= u for s in sn) / len(sn)) if sn else 0:>4.0%}")
 
 
-def principal():
-    if sys.stdout is not None:        # con pythonw (servidor sin consola) no hay salida estandar
+# Spanish command names from earlier versions still work
+ALIASES = {"indexar": "index", "buscar": "search", "servidor": "server", "arrancar": "start", "parar": "stop",
+           "ganchos": "hooks", "evaluar": "evaluate"}
+
+
+def main():
+    if sys.stdout is not None:        # with pythonw (server without a console) there is no standard output
         sys.stdout.reconfigure(encoding="utf-8")
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    if cmd == "indexar":
+    cmd = ALIASES.get(cmd, cmd)
+    if cmd == "index":
         t0 = time.time()
-        print(json.dumps(indexar(hablar=True), ensure_ascii=False), f"| {time.time() - t0:.1f} s")
-    elif cmd == "buscar" and len(sys.argv) > 2:
-        consulta = " ".join(sys.argv[2:])
-        resultados = consultar_servidor(consulta, K) or indice_en_memoria().buscar(consulta, K)
-        for n, r in enumerate(resultados, 1):
-            print(f"{n}. {r['archivo']}:{r['ini']}-{r['fin']} ({r['tipo']}) sim {r['sem']:.2f} - {r['titulo']}")
-            print("   " + r["texto"].strip()[:260].replace("\n", " ") + " ...")
-    elif cmd == "servidor":
-        servidor()
-    elif cmd == "arrancar":
-        arrancar()
-    elif cmd == "parar":
-        parar()
+        print(json.dumps(build_index(talk=True), ensure_ascii=False), f"| {time.time() - t0:.1f} s")
+    elif cmd == "search" and len(sys.argv) > 2:
+        query = " ".join(sys.argv[2:])
+        results = query_server(query, K) or index_in_memory().search(query, K)
+        for n, r in enumerate(results, 1):
+            print(f"{n}. {r['file']}:{r['start']}-{r['end']} ({r['kind']}) sim {r['sem']:.2f} - {r['title']}")
+            print("   " + r["text"].strip()[:260].replace("\n", " ") + " ...")
+    elif cmd == "server":
+        server()
+    elif cmd == "start":
+        start()
+    elif cmd == "stop":
+        stop()
     elif cmd == "hook":
-        gancho()
-    elif cmd == "ganchos":
-        ganchos()
-    elif cmd == "evaluar":
-        evaluar()
+        hook()
+    elif cmd == "hooks":
+        register_hooks()
+    elif cmd == "evaluate":
+        evaluate()
     else:
         print(__doc__)
 
 
 if __name__ == "__main__":
-    principal()
+    main()

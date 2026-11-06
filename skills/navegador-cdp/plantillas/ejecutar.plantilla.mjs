@@ -1,24 +1,26 @@
-// Proceso: __NOMBRE__
-// Se prueba con:  node proceso.mjs probar __NOMBRE__ [clave=valor ...]
-// Los parámetros llegan en `params`. `pagina` es una pestaña nueva y propia del proceso (se cierra al terminar).
-// Escribe los pasos, y al final comprueba el resultado REAL con verificar(...): que no haya errores no basta.
+// Process: __NOMBRE__
+// Test it with:  node proceso.mjs probar __NOMBRE__ [key=value ...]
+// Parameters arrive in `params`. `pagina` is a new tab that belongs to the process alone (closed when it ends).
+// Write the steps, and at the end check the REAL result with verificar(...): the absence of errors is not enough.
 import { proceso } from '../../scripts/motor.mjs';
 
 await proceso('__NOMBRE__', async ({ pagina, params, paso, verificar, irreversible }) => {
-  await paso('Abrir la página', async () => {
+  await paso('Open the page', async () => {
     await pagina.ir(params.url || 'https://example.com');
   });
 
-  // Más pasos. Cada paso con un título claro, para que el error diga dónde falló. Acciones disponibles:
-  //   pagina.esperar('texto=Guardar')   pagina.clic('#boton')   pagina.escribir('input[name=q]', 'hola')
-  //   pagina.seleccionar('select#mes', 'Octubre')   pagina.tecla('Enter')   pagina.subir('#archivo', ruta)
-  //   pagina.leer('#resultado')   pagina.captura('salida.png')   pagina.evaluar('document.title')
+  // More steps. Give each step a clear title so the error says where it failed. Available actions
+  // (ir = goto, esperar = wait, clic = click, escribir = type, seleccionar = select, tecla = key, subir = upload,
+  //  leer = read, captura = screenshot, evaluar = evaluate JavaScript):
+  //   pagina.esperar('texto=Save')   pagina.clic('#button')   pagina.escribir('input[name=q]', 'hello')
+  //   pagina.seleccionar('select#month', 'October')   pagina.tecla('Enter')   pagina.subir('#file', path)
+  //   pagina.leer('#result')   pagina.captura('output.png')   pagina.evaluar('document.title')
   //
-  // Antes de algo que no se puede deshacer (enviar, pagar, borrar, publicar):
-  //   irreversible('Enviar el formulario de pago');
+  // Before anything that cannot be undone (send, pay, delete, publish):
+  //   irreversible('Submit the payment form');
 
-  await paso('Comprobar el resultado', async () => {
+  await paso('Check the result', async () => {
     const texto = await pagina.leer();
-    verificar(texto.length > 0, 'La página tiene contenido');
+    verificar(texto.length > 0, 'The page has content');
   });
 });

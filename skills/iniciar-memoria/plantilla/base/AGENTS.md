@@ -1,53 +1,53 @@
-# {{NOMBRE}}
+# {{NAME}}
 
-{{DESCRIPCION}}
+{{DESCRIPTION}}
 
-> Este archivo se carga en cada sesión: mantenlo en 100 líneas o menos. Lo largo vive en el vault.
+> This file is loaded in every session: keep it at 100 lines or fewer. Long material lives in the vault.
 
-## Memoria
-- Vault de Obsidian: `{{VAULT}}`
-- Dentro del vault (rutas relativas): índice `00 Inicio.md` · inbox `00 Inbox/` · lecciones `03 Lecciones/` · decisiones `04 Decisiones/` · fuentes `05 Fuentes/`
-- Fuera del vault: estado vivo `docs/ESTADO.md` · registro corto `docs/DECISIONS.md`
-- Si conectas otro vault con otra estructura, cambia aquí las rutas (lo hace la skill global `iniciar-memoria`). Todas las skills leen este bloque.
+## Memory
+- Obsidian vault: `{{VAULT}}`
+- Inside the vault (relative paths): index `00 Home.md` · inbox `00 Inbox/` · lessons `03 Lessons/` · decisions `04 Decisions/` · sources `05 Sources/`
+- Outside the vault: live state `docs/STATE.md` · short log `docs/DECISIONS.md`
+- If you connect another vault with a different structure, change the paths here (the global skill `iniciar-memoria` does it). All the skills read this block.
 
-## Empieza aquí
-1. Lee `docs/ESTADO.md`: dónde quedó el trabajo y cuál es el siguiente paso.
-2. Si necesitas contexto, abre el índice del vault y sigue solo los `[[enlaces]]` que la tarea requiera. No leas carpetas enteras.
-3. La carpeta de fuentes es material crudo: no la leas completa; busca con grep.
-4. Antes de actuar sobre un dato guardado (ruta, función, cifra, estado), compruébalo en la fuente. La memoria puede estar vieja.
+## Start here
+1. Read `docs/STATE.md`: where the work stands and what the next step is.
+2. If you need context, open the vault index and follow only the `[[links]]` the task requires. Do not read whole folders.
+3. The sources folder is raw material: do not read it whole; search with grep.
+4. Before acting on a stored fact (path, function, figure, status), check it against the source. The memory may be stale.
 
-## Stack y comandos
+## Stack and commands
 - Stack: {{STACK}}
-- Instalar: (completar)
-- Ejecutar: (completar)
-- Probar: (completar)
+- Install: (fill in)
+- Run: (fill in)
+- Test: (fill in)
 
-## Reglas de oro
-- (Completar con 3 a 7 reglas propias del proyecto.)
-- No inventes datos: toda cifra lleva su fuente y su fecha.
-- Sin credenciales ni datos personales en el repositorio ni en las notas.
-- Si dos fuentes se contradicen, dilo; no elijas en silencio.
+## Golden rules
+- (Fill in with 3 to 7 rules specific to the project.)
+- Do not invent data: every figure carries its source and its date.
+- No credentials or personal data in the repository or in the notes.
+- If two sources contradict each other, say so; do not pick one silently.
 
-## Cómo guardar memoria
-| Qué | Dónde | Cómo |
+## How to save memory
+| What | Where | How |
 |---|---|---|
-| Dónde quedó el trabajo | `docs/ESTADO.md` | Se reescribe, no se acumula |
-| Decisión (resumen) | `docs/DECISIONS.md` | Se anexa: 5 líneas como máximo |
-| Decisión con razones | decisiones del vault | Nota ADR numerada |
-| Lección reutilizable | lecciones del vault | Una idea por nota |
-| Idea suelta | inbox del vault | Revisar y mover cada semana |
+| Where the work stands | `docs/STATE.md` | Rewritten, not accumulated |
+| Decision (summary) | `docs/DECISIONS.md` | Appended: 5 lines at most |
+| Decision with reasons | the vault's decisions | Numbered ADR note |
+| Reusable lesson | the vault's lessons | One idea per note |
+| Loose idea | the vault's inbox | Review and move every week |
 
-Al escribir: una idea por nota, con fecha, fuente y el porqué; enlaza con `[[wikilinks]]`; busca si ya existe y actualiza antes de duplicar; borra lo que dejó de ser cierto.
+When writing: one idea per note, with date, source and the why; link with `[[wikilinks]]`; check whether it already exists and update before duplicating; delete what stopped being true.
 
-Al cerrar una tarea importante usa la skill `cerrar-tarea`.
+When closing an important task use the `close-task` skill.
 
 ## Skills
-Procedimientos en `.claude/skills/<nombre>/SKILL.md`. Si tu agente no tiene skills, lee el archivo directamente.
-- `memoria`: consultar y escribir en el vault.
-- `cerrar-tarea`: rutina de cierre de una tarea.
-- `auditar-memoria`: limpieza periódica de la memoria.
+Procedures in `.claude/skills/<name>/SKILL.md`. If your agent has no skills, read the file directly.
+- `memory`: read and write in the vault.
+- `close-task`: closing routine for a task.
+- `audit-memory`: periodic memory cleanup.
 
-## Mapa del repositorio
-- `docs/`: estado y decisiones.
-- `conocimiento/`: vault local por defecto; no existe si el vault es externo.
-- (Añadir aquí las carpetas de código cuando existan.)
+## Repository map
+- `docs/`: state and decisions.
+- `knowledge/`: default local vault; it does not exist if the vault is external.
+- (Add the code folders here once they exist.)

@@ -4,7 +4,7 @@
       "command": "cmd",
       "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory"],
       "env": {
-        "MEMORY_FILE_PATH": "{{RUTA}}/.memory/memory.jsonl"
+        "MEMORY_FILE_PATH": "{{PATH}}/.memory/memory.jsonl"
       }
     }
   }
