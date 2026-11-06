@@ -1,0 +1,35 @@
+# Qué NO debe leer Graphify en este proyecto. Estilo .gitignore (según el README de Graphify, que además
+# respeta el .gitignore del proyecto). Revísalo antes de generar el primer grafo.
+# Por qué importa: en la pasada de documentos, Graphify manda el contenido al modelo del asistente.
+# Lo que no se ignore aquí puede acabar enviándose.
+
+# Material crudo o con datos personales (conversaciones, exportaciones, capturas, datos)
+conocimiento/05 Fuentes/
+fuentes/
+datos/
+*.csv
+*.xlsx
+
+# Memoria del agente y notas locales (el vault ya es su propio grafo de enlaces)
+# Quita estas líneas solo si quieres mapear las notas.
+conocimiento/
+.memory/
+AGENTS.md
+docs/ESTADO.md
+docs/DECISIONS.md
+
+# Dependencias, compilados y salidas
+node_modules/
+.venv/
+venv/
+dist/
+build/
+__pycache__/
+*.min.js
+graphify-out/
+
+# Credenciales
+.env
+*.env
+client_secret*.json
+token.json

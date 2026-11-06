@@ -1,0 +1,14 @@
+# Obsidian: estado local de la interfaz
+conocimiento/.obsidian/workspace*.json
+conocimiento/.obsidian/cache
+
+# Memoria por MCP (puede contener datos sensibles)
+.memory/
+
+# Ajustes locales de Claude Code
+.claude/settings.local.json
+
+# Material crudo con posibles datos personales: no se versiona por defecto.
+# Quita estas dos líneas si el material es seguro de versionar.
+conocimiento/05 Fuentes/*
+!conocimiento/05 Fuentes/Fuentes.md

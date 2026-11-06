@@ -1,0 +1,1 @@
+- Recuperación automática del vault (búsqueda semántica local en `.rag/`): se activa con `.rag\preparar.ps1`. Una vez activa, un gancho añade a cada mensaje los trozos más relevantes del vault y de `docs/`, con archivo y líneas: verifícalos en la fuente antes de usarlos. Se apaga con la variable `RAG_DESACTIVAR=1`.
