@@ -1,0 +1,2 @@
+# Saltos de línea LF en el repositorio, también para quien trabaje en Windows (un shebang con CRLF falla en macOS y Linux)
+* text=auto eol=lf

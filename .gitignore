@@ -1,0 +1,23 @@
+# Memoria y estado locales de las skills: nunca se publican
+skills/navegador-cdp/borradores/
+skills/navegador-cdp/procesos/*
+!skills/navegador-cdp/procesos/LEEME.md
+
+# Python y Node
+__pycache__/
+*.pyc
+node_modules/
+
+# Credenciales, entornos y perfiles de navegador
+.env
+*.env
+client_secret*.json
+credentials.json
+token.json
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Configuración personal del orquestador (qué CLI lidera)
+skills/workflow-orquestar/orquestador.json
