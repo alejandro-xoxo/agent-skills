@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Proprietary — Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 // Copyright (c) 2026 alejandro-xoxo
 // Manejo puntual del navegador por línea de comandos. Cada comando imprime poco y falla con un mensaje claro.
 // Uso: node nav.mjs <comando> [argumentos] [--puerto 9222] [--tab <id>]

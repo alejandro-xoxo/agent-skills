@@ -2,7 +2,7 @@
 
 ## Autoría
 
-Las skills `navegador-cdp`, `workflow-orquestar` e `iniciar-memoria` (con su carpeta `plantilla/`) de este repositorio son obra de **alejandro-xoxo** (https://github.com/alejandro-xoxo) y se publican bajo la licencia MIT (ver `LICENSE`). Copyright (c) 2026 alejandro-xoxo.
+Las skills `navegador-cdp`, `workflow-orquestar` e `iniciar-memoria` (con su carpeta `plantilla/`) de este repositorio son obra de **alejandro-xoxo** (https://github.com/alejandro-xoxo) y se publican bajo una licencia propietaria, con todos los derechos reservados (ver `LICENSE`). Copyright (c) 2026 alejandro-xoxo. Las versiones anteriores a este cambio se publicaron bajo la licencia MIT.
 
 ## Herramientas de terceros que se usan pero no se incluyen
 

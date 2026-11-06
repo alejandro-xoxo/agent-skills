@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: LicenseRef-Proprietary — Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 // Copyright (c) 2026 alejandro-xoxo
 // Motor para manejar Chrome o Edge por el protocolo CDP, sin extensiones y sin dependencias (Node 22 o superior).
 // Lo usan nav.mjs (tareas puntuales) y los procesos guardados (borradores/ y procesos/).

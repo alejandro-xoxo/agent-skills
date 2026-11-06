@@ -1,21 +1,58 @@
-MIT License
+Copyright (c) 2026 alejandro-xoxo. All rights reserved.
 
-Copyright (c) 2026 alejandro-xoxo
+PROPRIETARY LICENSE
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Resumen en español (si hay diferencias, prevalece el texto en inglés):
+Todos los derechos reservados. Puedes ver el código para evaluarlo. No puedes
+copiarlo, modificarlo, redistribuirlo, publicarlo, venderlo ni incluirlo en
+otros productos sin permiso previo y por escrito del autor. El uso más allá de
+la evaluación solo está permitido a quien haya obtenido una copia del autor o
+de un mercado autorizado, bajo sus condiciones de compra y solo para uso propio.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+----------------------------------------------------------------------------
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. Ownership. The software, scripts, documentation and other materials in this
+   repository (the "Work") are the exclusive property of alejandro-xoxo (the
+   "Author"). No license or other right in the Work is granted except as
+   expressly stated in this document or in a separate written agreement with
+   the Author, or in the purchase terms of a marketplace authorized by the
+   Author.
+
+2. Viewing. You may view the source code in this repository and, as allowed by
+   the GitHub Terms of Service, fork it within GitHub, solely for the purpose
+   of viewing and evaluating it.
+
+3. Restrictions. Without the Author's prior written permission you may not, in
+   whole or in part: (a) copy the Work, except as incidental to viewing it or
+   as in section 2; (b) modify it or create derivative works; (c) distribute,
+   publish, sublicense, sell, rent, lend, host or otherwise make it available
+   to any third party; (d) include it in another product or service; or
+   (e) remove or alter any copyright or license notice.
+
+4. Licensed use. Use of the Work beyond evaluation is permitted only to a
+   person who obtained a copy directly from the Author or from a marketplace
+   authorized by the Author, under that marketplace's purchase terms, and only
+   for that person's own use. Section 3 still applies to that person.
+
+5. Earlier versions. Commits of this repository made before this license was
+   adopted (5b5814f and 163d694) were published under the MIT License. Copies
+   already obtained under that license remain governed by it. This license
+   applies to every version of the Work from the commit that introduced it
+   onward.
+
+6. Third-party components. Tools, libraries and models that the Work uses but
+   does not include are not covered by this license and remain under their own
+   licenses (see NOTICE.md).
+
+7. No warranty. THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+   EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+   IN CONNECTION WITH THE WORK OR THE USE OR OTHER DEALINGS IN THE WORK.
+
+8. Termination. Any breach of this license automatically ends the rights
+   granted to you under it.
+
+9. Contact. To ask for permission or a license, contact the Author through the
+   GitHub profile https://github.com/alejandro-xoxo.
