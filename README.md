@@ -1,8 +1,8 @@
 # agent-skills
 
-Skills for AI agents that can run shell commands. **They do not depend on a specific agent**: they are folders with instructions (`SKILL.md`) and ordinary scripts that any agent can read and run. With them, an agent can drive the browser without extensions, split a big job among several command-line agents and keep a project's memory organized (state, decisions, lessons and an Obsidian vault).
+Skills for AI agents that can run shell commands. **They do not depend on a specific agent**: they are folders with instructions (`SKILL.md`) and ordinary scripts that any agent can read and run. With them, an agent can drive the browser without extensions, split a big job among several command-line agents keep a project's memory organized (state, decisions, lessons and an Obsidian vault) and work in Git under a professional GitFlow routine.
 
-The skills were first written in Spanish and are now in English. The folder names (`navegador-cdp`, `workflow-orquestar`, `iniciar-memoria`) and the names of the commands of `navegador-cdp` are kept in Spanish so existing installs keep working; each `SKILL.md` includes a table that translates them.
+The skills were first written in Spanish and are now in English. The folder names (`navegador-cdp`, `workflow-orquestar`, `iniciar-memoria`) and the names of the commands of `navegador-cdp` are kept in Spanish so existing installs keep working; each `SKILL.md` includes a table that translates them. The `git-work` skill is still written in Spanish.
 
 ## Skills
 
@@ -11,6 +11,7 @@ The skills were first written in Spanish and are now in English. The folder name
 | [`navegador-cdp`](skills/navegador-cdp) ("CDP browser") | Drives Chrome or Edge **without extensions**, with Node scripts that have no dependencies. It is for one-off tasks on a website (open, read, click, type, upload files, screenshots) and for **creating, saving and reusing repeatable processes**: a new process is only saved to memory after it has run from start to finish with no errors and with its result verified. |
 | [`workflow-orquestar`](skills/workflow-orquestar) ("orchestrate workflow") | Orchestrates a large job by splitting it among CLI agents (OpenCode, agy and Codex), with dependency graphs, self-healing with tests, a live visual monitor, change merging and token and cost telemetry. The leading agent is chosen in `orchestrator.json`. |
 | [`iniciar-memoria`](skills/iniciar-memoria) ("start memory") | Sets up a **project's memory** from a bundled template (`plantilla/`): a short `AGENTS.md` that is always loaded, `docs/STATE.md` (where the work stands), `docs/DECISIONS.md`, three memory skills (`memory`, `close-task`, `audit-memory`) and an Obsidian vault. It can **connect a vault you already have** without touching it. Optionally it prepares the ground for a code graph (Graphify, not installed) and for **automatic retrieval** of the vault: a local semantic search that adds the most relevant chunks to every message. Nothing heavy is installed without your go-ahead. |
+| [`git-work`](skills/git-work) ("git workflow") | A professional Git routine under **GitFlow**: work branches (`feat/*`, `fix/*`, `refactor/*`) that start from and merge into `develop`, a controlled step from `develop` to `main` by SemVer release, short atomic commits under Conventional Commits with no AI watermarks, and a toolbox for merge and rebase conflicts, worktrees and recovery. It includes `scripts/git_doctor.py`, a repository check. |
 
 The first two complement each other: with `workflow-orquestar`, several agents can build or run several `navegador-cdp` processes at once, each in its own tab of the same browser.
 
@@ -18,6 +19,7 @@ The first two complement each other: with `workflow-orquestar`, several agents c
 
 - **`navegador-cdp`**: Node.js 22 or later and Chrome or Edge installed.
 - **`iniciar-memoria`**: Windows with PowerShell 5.1 or later (the template script, `new-project.ps1`, is PowerShell). For the optional automatic retrieval, also the `py` launcher with Python 3.10 to 3.13 (tested with 3.12) and about 0.6 GB of download the first time. Obsidian is optional.
+- **`git-work`**: git, and Python 3 for `scripts/git_doctor.py`.
 - **`workflow-orquestar`**: Python 3, git, and at least one worker CLI installed (`opencode`, `agy` or `codex`). It includes `selftest.py`, which tests the orchestrator with a fake worker, without spending quota or calling any model.
 
 ## Installation

@@ -2,7 +2,7 @@
 
 ## Authorship
 
-The `navegador-cdp`, `workflow-orquestar` and `iniciar-memoria` skills (with its `plantilla/` folder) of this repository are the work of **alejandro-xoxo** (https://github.com/alejandro-xoxo) and are published under a proprietary license, with all rights reserved (see `LICENSE`). Copyright (c) 2026 alejandro-xoxo. Versions before this change were published under the MIT license.
+The `navegador-cdp`, `workflow-orquestar`, `iniciar-memoria` (with its `plantilla/` folder) and `git-work` skills of this repository are the work of **alejandro-xoxo** (https://github.com/alejandro-xoxo) and are published under a proprietary license, with all rights reserved (see `LICENSE`). Copyright (c) 2026 alejandro-xoxo. Versions before this change were published under the MIT license.
 
 ## Third-party tools that are used but not included
 
