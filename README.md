@@ -85,7 +85,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File skills\iniciar-memoria\plant
   -Destination "C:\path\to\my-project" -Name "My project" -Description "What it does" -WithGit
 ```
 
-It creates `AGENTS.md`, `docs/` and a vault in `knowledge/` **without overwriting** anything that already exists (`-Force` allows it). With `-Vault "<path>"` it uses an Obsidian vault you already have instead of creating one. `-WithGraphify` and `-WithRag` only copy files and add lines to `AGENTS.md` and `.gitignore`; turning on the RAG is a separate step (`.rag\prepare.ps1`). The details, the memory levels and what has been verified are in [`plantilla/README.md`](skills/iniciar-memoria/plantilla/README.md).
+It creates `AGENTS.md`, `docs/` and a vault in `knowledge/` **without overwriting** anything that already exists (`-Force` allows it). With `-Vault "<path>"` it uses an Obsidian vault you already have instead of creating one. `-WithGraphify` and `-WithRag` only copy files and add lines to `AGENTS.md` and `.gitignore`; turning on the RAG is a separate step (`.rag\prepare.ps1`) that the skill only runs if you explicitly ask it to ("turn on the RAG"). The details, the memory levels and what has been verified are in [`plantilla/README.md`](skills/iniciar-memoria/plantilla/README.md).
 
 ## Quick start: `workflow-orquestar`
 

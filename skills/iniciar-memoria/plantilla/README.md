@@ -137,6 +137,8 @@ It is turned on in two steps, so that creating a project never installs or downl
 1. `-WithRag` (or `-RagOnly` on a project that already exists) copies `.rag/` (the `rag.py` engine, the `prepare.ps1` script, a guide and an evaluation example), adds a line to `AGENTS.md` and ignores `.rag/` in git.
 2. `.rag\prepare.ps1` does the heavy part: Python environment (3.10 to 3.13), `fastembed`, index, hooks in `.claude/settings.local.json` (merging with what is there, with a backup) and a local server. The first time it downloads about 0.6 GB of model, which is shared among projects.
 
+`/iniciar-memoria` on its own does not turn on the RAG. If you explicitly ask it to ("turn on the RAG" or "start with RAG"), the skill does both steps back to back: it checks Python, summarizes the cost, waits for your yes, prepares and turns on, and verifies the result.
+
 What you need to know:
 - It is optional and has costs: about 700 MB of memory while the server is active, between 500 and 900 more tokens for each related message, and `.rag/index/` stores the full text of the sources (it must not be shared).
 - It only injects if the message is about the vault (similarity threshold 0.50). Giving no context is better than giving the wrong one.
