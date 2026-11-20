@@ -10,10 +10,11 @@ const AYUDA = `Browser control over CDP (no extensions). Usage: node nav.mjs <co
 (Command and flag names are Spanish; the English meaning is in parentheses.)
 
 Browser
-  abrir (open) [--url U] [--navegador edge|chrome] [--perfil name] [--headless] [--puerto N]
+  abrir (open) [--url U] [--navegador edge|chrome] [--exe path] [--perfil name] [--headless] [--puerto N] [--arg=--flag ...]
         Without --perfil (profile) the profile is temporary (deleted on close). With --perfil the session is kept between uses.
   estado (status)             browsers opened by this skill and their tabs
   cerrar (close) [--borrar-perfil]    closes the browser on that port (temporary ones delete their profile)
+  diagnostico (diagnose)      browser version, dark-mode preference seen by pages, WebGL renderer and GPU acceleration status
 Tabs
   pestanas (tabs) | nueva (new) <url> | cerrar-pestana (close-tab) <id>
 On a tab (--tab <id> or the TID variable; if there is only one tab, that one is used)
@@ -32,8 +33,12 @@ function parsear(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
-      const k = a.slice(2);
-      if (BOOLEANAS.has(k) || argv[i + 1] === undefined || argv[i + 1].startsWith('--')) f[k] = true; else f[k] = argv[++i];
+      let k = a.slice(2), v;
+      const eq = k.indexOf('=');
+      if (eq > 0) { v = k.slice(eq + 1); k = k.slice(0, eq); }          // --clave=valor (needed for values that start with --)
+      else if (BOOLEANAS.has(k) || argv[i + 1] === undefined || argv[i + 1].startsWith('--')) v = true;
+      else v = argv[++i];
+      if (k === 'arg') (f.arg ||= []).push(v); else f[k] = v;           // --arg can be repeated
     } else pos.push(a);
   }
   return { pos, f };
@@ -53,9 +58,21 @@ const falta = (n, uso) => { if (a.length < n) throw new Error(`Missing argument.
 try {
   if (!cmd || cmd === 'ayuda') console.log(AYUDA);
   else if (cmd === 'abrir') {
-    const r = await lanzar({ navegador: f.navegador || 'auto', puerto, perfil: f.perfil || null, headless: !!f.headless, url: f.url || 'about:blank' });
+    const r = await lanzar({ navegador: f.navegador || 'auto', puerto, perfil: f.perfil || null, headless: !!f.headless, url: f.url || 'about:blank', exe: typeof f.exe === 'string' ? f.exe : null, args: f.arg || [] });
     console.log(`Browser ready on port ${r.puerto}. ${r.temporal ? 'Temporary profile (deleted on close)' : 'Persistent profile'}: ${r.perfil}`);
     for (const t of await pestanas(puerto)) console.log(`  ${t.id}  ${t.url.slice(0, 80)}`);
+  } else if (cmd === 'diagnostico') {
+    // Health check of the browser as the pages see it. Use a window with a real GPU: in --headless the GPU always says "Software only".
+    const d = await conPagina(p => p.evaluar(`JSON.stringify((()=>{const m=q=>matchMedia(q).matches;let r='n/a';try{const c=document.createElement('canvas'),g=c.getContext('webgl2')||c.getContext('webgl');if(g){const e=g.getExtension('WEBGL_debug_renderer_info');r=e?g.getParameter(e.UNMASKED_RENDERER_WEBGL):g.getParameter(g.RENDERER)}else r='no WebGL'}catch(x){r='error: '+x.message}return {navegador:(navigator.userAgent.match(/(Chrome|Edg)\\/[0-9.]+/)||[''])[0],prefiere_oscuro:m('(prefers-color-scheme: dark)'),renderizador_webgl:r,pantalla:screen.width+'x'+screen.height+' @'+devicePixelRatio+'x'}})())`));
+    console.log(typeof d === 'string' ? d : JSON.stringify(d));
+    const g = await Pagina.abrir(puerto, { nueva: true, url: 'chrome://gpu' });
+    try {
+      await new Promise(r => setTimeout(r, 3500));
+      const txt = await g.evaluar(`(()=>{let t='';const grab=r=>{t+=(r.textContent||'')+' ';r.querySelectorAll('*').forEach(e=>{if(e.shadowRoot)grab(e.shadowRoot)})};grab(document);return t.replace(/\\s+/g,' ')})()`);
+      const campos = ['Canvas', 'Compositing', 'Rasterization', 'Video Decode', 'Video Encode', 'WebGL', 'WebGL2', 'WebGPU', 'OpenGL', 'Vulkan'];
+      console.log('GPU (chrome://gpu):');
+      for (const c of campos) { const m = String(txt).match(new RegExp('(?:^|[*] )' + c + ': ([^*]{2,100})(?:[*]|$)')); if (m) console.log('  ' + c + ': ' + m[1].trim()); }
+    } finally { g.desconectar(); try { await fetch(`http://127.0.0.1:${puerto}/json/close/${g.id}`); } catch {} }
   } else if (cmd === 'estado') {
     const reg = abiertos();
     const claves = Object.keys(reg);

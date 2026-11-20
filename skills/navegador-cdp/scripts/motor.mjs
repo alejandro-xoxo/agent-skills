@@ -8,7 +8,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 
-export const DATOS = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'navegador-cdp');
+// Data folder: Windows %LOCALAPPDATA%, macOS ~/Library/Application Support, Linux $XDG_DATA_HOME or ~/.local/share.
+const BASE_DATOS = process.env.LOCALAPPDATA
+  || (process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support') : (process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share')));
+export const DATOS = path.join(BASE_DATOS, 'navegador-cdp');
 const REGISTRO = path.join(DATOS, 'abiertos.json');
 const dormir = ms => new Promise(r => setTimeout(r, ms));
 
@@ -22,28 +25,44 @@ export async function responde(puerto) {
 }
 
 // ---------- Open and close the browser ----------
-function buscarNavegador(nombre = 'auto') {
+// Names looked up in PATH on Linux/macOS (Arch ships Chrome as google-chrome-stable, Debian as google-chrome, etc.).
+const EN_PATH = {
+  edge: ['microsoft-edge', 'microsoft-edge-stable'],
+  chrome: ['google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser', 'brave-browser', 'brave'],
+};
+function enPath(nombres) {
+  for (const dir of (process.env.PATH || '').split(path.delimiter).filter(Boolean))
+    for (const n of nombres) { const p = path.join(dir, n + (process.platform === 'win32' ? '.exe' : '')); if (fs.existsSync(p)) return p; }
+  return null;
+}
+
+function buscarNavegador(nombre = 'auto', exeExplicito = null) {
+  // 1) an explicit path (--exe or NAVCDP_EXE) always wins
+  const forzado = exeExplicito || process.env.NAVCDP_EXE;
+  if (forzado) { if (!fs.existsSync(forzado)) throw new Error(`The browser path does not exist: ${forzado}`); return forzado; }
   const pf = process.env.ProgramFiles, pf86 = process.env['ProgramFiles(x86)'], la = process.env.LOCALAPPDATA;
   const edge = [pf86 && `${pf86}\\Microsoft\\Edge\\Application\\msedge.exe`, pf && `${pf}\\Microsoft\\Edge\\Application\\msedge.exe`,
     '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/usr/bin/microsoft-edge'];
   const chrome = [pf && `${pf}\\Google\\Chrome\\Application\\chrome.exe`, pf86 && `${pf86}\\Google\\Chrome\\Application\\chrome.exe`,
     la && `${la}\\Google\\Chrome\\Application\\chrome.exe`, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/usr/bin/google-chrome', '/usr/bin/chromium'];
+    '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/opt/google/chrome/chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
   const lista = nombre === 'edge' ? edge : nombre === 'chrome' ? chrome : [...edge, ...chrome];
-  const exe = lista.filter(Boolean).find(p => fs.existsSync(p));
-  if (!exe) throw new Error(`Cannot find the browser (${nombre}). Install Edge or Chrome.`);
+  const exe = lista.filter(Boolean).find(p => fs.existsSync(p))
+    || enPath(nombre === 'edge' ? EN_PATH.edge : nombre === 'chrome' ? EN_PATH.chrome : [...EN_PATH.edge, ...EN_PATH.chrome]);
+  if (!exe) throw new Error(`Cannot find the browser (${nombre}). Looked in the usual install paths and in PATH. Install Edge or Chrome, or give the executable with --exe <path> (or the NAVCDP_EXE variable).`);
   return exe;
 }
 
 // perfil = null -> temporary profile, deleted on close. perfil = "name" -> persistent profile (keeps the session between uses).
-export async function lanzar({ navegador = 'auto', puerto = 9222, perfil = null, headless = false, url = 'about:blank' } = {}) {
+export async function lanzar({ navegador = 'auto', puerto = 9222, perfil = null, headless = false, url = 'about:blank', exe: exeExplicito = null, args: extras = [] } = {}) {
   if (await responde(puerto)) throw new Error(`Port ${puerto} is already used by a browser with debugging enabled. Use another port or close it with: node nav.mjs cerrar --puerto ${puerto}`);
-  const exe = buscarNavegador(navegador);
+  const exe = buscarNavegador(navegador, exeExplicito);
   const temporal = !perfil;
   const dir = temporal ? fs.mkdtempSync(path.join(os.tmpdir(), `navcdp-${puerto}-`)) : path.join(DATOS, 'perfiles', perfil);
   fs.mkdirSync(dir, { recursive: true });
   const args = [`--remote-debugging-port=${puerto}`, `--user-data-dir=${dir}`, '--no-first-run', '--no-default-browser-check'];
   if (headless) args.push('--headless=new');
+  args.push(...extras);   // extra browser flags (nav.mjs: --arg=--force-dark-mode), useful to test a configuration
   args.push(url);
   spawn(exe, args, { detached: true, stdio: 'ignore' }).unref();
   for (let i = 0; i < 40; i++) {
@@ -64,7 +83,8 @@ function matarPorPerfil(dir) {
     const ps = "$d = $env:NAVCDP_PERFIL; Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'msedge.exe' -or $_.Name -eq 'chrome.exe') -and $_.CommandLine -and $_.CommandLine.Contains($d) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }";
     execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { env: { ...process.env, NAVCDP_PERFIL: dir }, stdio: 'ignore' });
   } else {
-    try { execFileSync('pkill', ['-f', dir], { stdio: 'ignore' }); } catch { /* nothing to close */ }
+    // Matches the exact flag of this skill's profile (not any process that merely mentions the folder).
+    try { execFileSync('pkill', ['-f', '--', `--user-data-dir=${dir}`], { stdio: 'ignore' }); } catch { /* nothing to close */ }
   }
 }
 
