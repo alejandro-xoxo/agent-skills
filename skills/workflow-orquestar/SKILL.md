@@ -13,23 +13,23 @@ The orchestrator (the agent that leads the work; it is chosen in `orchestrator.j
 
 ## 1. Engines and Workers
 
-- **`opencode`** (first by default, free): free models of the OpenCode CLI (`npm install -g @opencode/cli`). No sign-in or cost; in tests it is the fastest (10-25 s). Check with:
+- **`opencode`** (optional, free; not in the default order, add it with `WF_WORKERS=agy,codex,opencode`): free models of the OpenCode CLI (`npm install -g @opencode/cli`). No sign-in or cost; in tests it is the fastest (10-25 s). Check with:
   `opencode run --standalone -m opencode/nemotron-3-ultra-free "Reply only: ok"`
-- **`agy`**: Antigravity CLI with Gemini and Claude models; high quota and tool support. Check with:
+- **`agy`** (first by default): Antigravity CLI with Gemini and Claude models; high quota and tool support. Default level: `gemini-3.8-flash-medium`. Check with:
   `agy -p "Reply only: ok" --mode plan --model gemini-3.8-flash-low`
-- **`codex`** (OpenAI account, paid): only with `worker="codex"`. It uses the model the person has configured in Codex (`codex exec -s read-only|workspace-write -C <folder>`).
+- **`codex`** (OpenAI account, second by default): uses the model the person has configured in Codex and **medium reasoning effort** (`codex exec -s read-only|workspace-write -C <folder> -c model_reasoning_effort="medium"`). Only `tier="max"` raises it to high and `fast` lowers it to low.
 
 ### Quality levels (`tier`) and models
 
 | `tier` | `opencode` (free) | `agy` (Gemini / Claude) | `codex` | What for |
 |---|---|---|---|---|
-| `max` | `opencode/nemotron-3-ultra-free` | `gemini-4-argon-high` | `default` | Complex architecture and security |
-| `pro` | `opencode/nemotron-3-ultra-free` | `gemini-3.8-flash-high` | `default` | Changes that cross modules, deep refactoring |
-| `standard` | `opencode/deepseek-v4.1-flash-free` | `gemini-3.8-flash-medium` | `default` | General development and controllers |
-| `fast` | `opencode/minimax-m3.1-flash-free` | `gemini-3.8-flash-low` | `default` | Mechanical tasks, scaffolding, high volume |
+| `max` | `opencode/nemotron-3-ultra-free` | `gemini-4-argon-high` | `default:high` | Complex architecture and security |
+| `pro` | `opencode/nemotron-3-ultra-free` | `gemini-3.8-flash-high` | `default:medium` | Changes that cross modules, deep refactoring |
+| `standard` (default) | `opencode/deepseek-v4.1-flash-free` | `gemini-3.8-flash-medium` | `default:medium` | General development and controllers |
+| `fast` | `opencode/minimax-m3.1-flash-free` | `gemini-3.8-flash-low` | `default:low` | Mechanical tasks, scaffolding, high volume |
 | `design` | — | `claude-sonnet-5-5-medium` | — | Graphic design and visual components |
 
-The default order is `opencode`, then `agy`.
+The default order is `agy`, then `codex`, with the **medium** level (`standard`) unless the task really needs more: the goal is to spend as few tokens as possible and to keep the orchestrator's own account (for example Claude) for planning and checking the final result, not for doing the labor. Raise to `pro` or `max` only for architecture, security or deep refactors; use `fast` for mechanical, high-volume work. A codex column value is `<model>:<effort>`; `default` means "the model configured in Codex".
 
 ---
 
