@@ -52,8 +52,9 @@ TIERS = {
     # Antigravity CLI with Gemini / Claude
     "agy": {"max": "gemini-4-argon-high", "pro": "gemini-3.8-flash-high", "standard": "gemini-3.8-flash-medium",
             "fast": "gemini-3.8-flash-low", "design": "claude-sonnet-5-5-medium"},
-    # Codex (OpenAI)
-    "codex": {"max": "default", "pro": "default", "standard": "default", "fast": "default"},
+    # Codex (OpenAI): "<model>:<reasoning effort>". "default" = the model configured in Codex. Medium effort by default
+    # (fewer tokens; `max` is the only level that uses high effort)
+    "codex": {"max": "default:high", "pro": "default:medium", "standard": "default:medium", "fast": "default:low"},
 }
 try:
     for _w, _m in json.loads((HERE / "models.json").read_text(encoding="utf-8")).items():
@@ -77,8 +78,9 @@ def orchestrator() -> str:
 
 
 def default_workers() -> tuple[str, ...]:
-    """Order of preference: opencode first (free) and agy as a fallback. The orchestrator CLI goes last."""
-    base = [w for w in os.environ.get("WF_WORKERS", "opencode,agy").split(",") if w]
+    """Order of preference: agy first (Gemini, medium effort) and codex second (OpenAI, medium effort). The agent that is
+    the orchestrator goes last, so its own account is the last one to be spent. opencode is optional: WF_WORKERS=opencode,agy,codex."""
+    base = [w for w in os.environ.get("WF_WORKERS", "agy,codex").split(",") if w]
     mine = CLI_WORKERS.get(orchestrator(), [])
     return tuple([w for w in base if w not in mine] + [w for w in base if w in mine])
 
@@ -291,8 +293,11 @@ def _codex(model: str, prompt: str, cwd: Path, edit: bool, timeout: int, tmp: Pa
         raise ValueError("task too long to pass as an argument: put the context in project files and refer to them")
     argv = [str(exe), "exec", "-s", "workspace-write" if edit else "read-only", "-C", str(cwd), "--skip-git-repo-check",
             "--ephemeral", "--color", "never"]
-    if model and model != "default":
-        argv += ["-m", model]
+    modelo, _, esfuerzo = (model or "default").partition(":")
+    if modelo and modelo != "default":
+        argv += ["-m", modelo]
+    if esfuerzo in ("minimal", "low", "medium", "high"):
+        argv += ["-c", f'model_reasoning_effort="{esfuerzo}"']      # less reasoning = fewer tokens
     return argv + [prompt]
 
 

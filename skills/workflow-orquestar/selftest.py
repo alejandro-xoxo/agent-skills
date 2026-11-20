@@ -339,9 +339,9 @@ def _():
     d = Path(tempfile.mkdtemp(prefix="wf-orq-"))
     try:
         wf.HERE = d
-        assert wf.orchestrator() == "claude" and wf.default_workers() == ("opencode", "agy")
-        for cli, expected in [("agy", ("opencode", "agy")), ("opencode", ("agy", "opencode")),
-                              ("codex", ("opencode", "agy"))]:
+        assert wf.orchestrator() == "claude" and wf.default_workers() == ("agy", "codex")
+        for cli, expected in [("agy", ("codex", "agy")), ("opencode", ("agy", "codex")),
+                              ("codex", ("agy", "codex"))]:
             (d / "orchestrator.json").write_text(json.dumps({"orchestrator": cli}), encoding="utf-8")
             assert wf.orchestrator() == cli and wf.default_workers() == expected, (cli, wf.default_workers())
         (d / "orchestrator.json").write_text("garbage", encoding="utf-8")
@@ -364,7 +364,12 @@ def _():
         assert ro[ro.index("-C") + 1] == str(Path("C:/proj")) and "--ephemeral" in ro
         ed = wf._codex("gpt-x", "x", Path("C:/proj"), True, 60, Path("."))
         assert ed[3] == "workspace-write" and ed[ed.index("-m") + 1] == "gpt-x"
-        assert "codex" not in wf.default_workers()                                              # paid: never in the default order
+        assert wf.default_workers()[:2] == ("agy", "codex")                                     # default order: agy, then codex
+        me = wf._codex("default:medium", "x", Path("C:/proj"), False, 60, Path("."))
+        assert "-m" not in me and me[me.index("-c") + 1] == 'model_reasoning_effort="medium"'   # medium effort, configured model
+        hi = wf._codex("gpt-x:high", "x", Path("C:/proj"), False, 60, Path("."))
+        assert hi[hi.index("-m") + 1] == "gpt-x" and hi[hi.index("-c") + 1] == 'model_reasoning_effort="high"'
+        assert wf.TIERS["codex"]["standard"] == "default:medium" and wf.TIERS["agy"]["standard"].endswith("-medium")
     finally:
         wf._codex_exe = real
     wf._codex_exe = lambda: None
