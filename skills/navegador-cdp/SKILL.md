@@ -31,11 +31,13 @@ In every command below, `S` is the `scripts/` folder of this skill, wherever it 
 | `captura` | screenshot | | | |
 | `titulo` / `url` / `html` / `eval` | title / URL / HTML / run JavaScript | | | |
 
-Useful flags: `--puerto` (port), `--perfil` (profile name), `--navegador` (edge or chrome), `--tab` (tab id), `--confirmo` (the user confirmed the irreversible steps), `--borrar-perfil` (delete the profile on close).
+Useful flags: `--puerto` (port), `--perfil` (profile name), `--navegador` (edge or chrome), `--exe <path>` (browser executable; or the `NAVCDP_EXE` variable, useful when it is installed somewhere unusual), `--arg=--some-flag` (extra browser flag, repeatable, e.g. `--arg=--force-dark-mode`), `--tab` (tab id), `--confirmo` (the user confirmed the irreversible steps), `--borrar-perfil` (delete the profile on close).
+
+`diagnostico` (diagnose) is a quick health check of the browser as pages see it: version, whether pages get the dark-mode preference, the WebGL renderer and the GPU acceleration status from `chrome://gpu`. Run it against a window with a real GPU; with `--headless` the GPU always reports "Software only".
 
 ## Why it works this way
 - The browser that gets opened is **a separate window** with its own profile. It does not touch the user's normal browser, tabs or sessions. That is why the user **signs in by hand** when a site asks for it; passwords are never requested or stored.
-- Without `--perfil`, the profile is temporary and is deleted on close. With `--perfil <name>` the session is kept between uses (useful for processes that would otherwise repeat a login), stored outside this folder in `%LOCALAPPDATA%\navegador-cdp\perfiles\`.
+- Without `--perfil`, the profile is temporary and is deleted on close. With `--perfil <name>` the session is kept between uses (useful for processes that would otherwise repeat a login), stored outside this folder: `%LOCALAPPDATA%\navegador-cdp\perfiles\` on Windows, `~/Library/Application Support/navegador-cdp/perfiles/` on macOS and `$XDG_DATA_HOME` (default `~/.local/share`)`/navegador-cdp/perfiles/` on Linux.
 - A saved process is not "what the agent remembers": it is a script (`ejecutar.mjs`) plus its sheet (`proceso.md`), which any agent can read and run.
 
 ## User commands
