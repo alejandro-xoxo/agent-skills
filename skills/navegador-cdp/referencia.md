@@ -5,8 +5,15 @@
 ## Requirements and tested scope
 - Node 22 or later (uses the built-in `fetch` and `WebSocket`) and Chrome or Edge installed.
 - **Tested on Windows with Edge and with Chrome 156** (with and without a visible window): open, go, read, wait, click (CSS, text and coordinates), right click, type, select, Enter, Ctrl+A, file upload, screenshot and close; the whole process cycle (fail, fix, save, reuse, repair, gates), including one against a real site; a persistent profile whose cookie survives closing and reopening; and Chrome and Edge open at the same time, isolated from each other.
-- **Not tested**: signing in to a real site (the user always does it by hand; Google may block it), macOS and Linux (the code has paths and `pkill` in place, but they have not been run) and non-Chromium browsers.
+- **Tested on Linux (Arch, Hyprland/Wayland, Chrome 158)**: open with a visible window and headless, `ir`, `eval`, `nueva`, `cerrar-pestana`, `diagnostico`, extra flags with `--arg=`, an invalid `--exe`, closing without touching another Chrome that was already running, and attaching with `--puerto` to a Chrome started by hand.
+- **Not tested**: signing in to a real site (the user always does it by hand; Google may block it), macOS (the paths are there but have not been run), the saved-process cycle on Linux and non-Chromium browsers.
 - `cerrar` (close) first closes the browser normally (`Browser.close`, about 4 s) so it saves cookies and session, and only forces whatever is left alive. Killing it abruptly used to lose the recent cookies of a persistent profile.
+
+## Finding the browser
+Order: `--exe` / `NAVCDP_EXE`, then the usual install paths, then PATH (`google-chrome-stable`, `google-chrome`, `chromium`, `chromium-browser`, `brave-browser`, `microsoft-edge`...). On Arch, Chrome is `/usr/bin/google-chrome-stable`, a launcher that also reads `~/.config/chrome-flags.conf`, so those flags apply to the browser this skill opens.
+
+## Attaching to a browser you started yourself
+Every command takes `--puerto`, so it works with any Chromium started with `--remote-debugging-port=N`. Useful on Wayland/Hyprland, where `abrir` shows the window on the workspace you are looking at: start the browser with a window rule instead, for example `hyprctl dispatch "hl.dsp.exec_cmd('[workspace 7 silent] google-chrome-stable --remote-debugging-port=9344 --user-data-dir=/tmp/navcdp-9344 --no-first-run about:blank')"`, then use `nav.mjs ... --puerto 9344`. `cerrar` only closes browsers it opened itself; to close one you attached to, send `Browser.close` over CDP.
 
 ## `nav.mjs` commands
 `node nav.mjs ayuda` (help) prints the full list. A **target** is a CSS selector, `texto=Save` or `x,y`. With `texto=`, the innermost visible element whose text matches wins (first the identical one, then those that are buttons, links or fields, then the shortest).
@@ -45,6 +52,9 @@ Script exit codes: `0` ok, `1` error, `3` no verifications, `10` irreversible st
 `estado.json` counts successful and failed uses and sets `roto` (broken) when the last run failed. `guardar` (save) sets it back to `false` when it accepts a fixed version.
 
 ## Known pitfalls
+- **GPU in `--headless`.** `diagnostico` and `chrome://gpu` show "Software only" with no window because headless uses SwiftShader. To judge real graphics or smoothness, test with a window.
+- **Do not match processes by a text that is in your own command.** `pkill -f` / `pgrep -f` with a string that also appears in the command you are running can match and kill your own shell. Build the pattern in pieces or use the bracket trick (`[n]avcdp`).
+- **`zsh` does not split variables.** `P="--puerto 9333"; nav.mjs $P ...` passes one argument in zsh; write the flag out.
 - **PowerShell and quotes.** Passing JSON or text with double quotes to a program breaks easily. Use `key=value` for the parameters, or `--params-archivo path.json`, and for `eval` prefer single quotes inside the JavaScript.
 - **Background processes.** Some agent tools kill processes started with `Start-Job` when the command ends. If you need something in the background, use the tool's own background-execution option. The commands of this skill finish by themselves and do not need it.
 - **Coordinates.** The window size changes the layout, and the coordinates with it. Use selectors or `texto=`.
