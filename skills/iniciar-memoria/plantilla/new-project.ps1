@@ -188,7 +188,7 @@ function PrepareGraphify([string]$projectRoot) {
 function PrepareRag([string]$projectRoot) {
   Write-Host "Automatic retrieval (local RAG): preparing the files, installing nothing"
   $extras = Join-Path $PSScriptRoot "extras\rag"
-  foreach ($fileName in @("rag.py", "prepare.ps1", "evaluation.example.json", "README.md")) {
+  foreach ($fileName in @("rag.py", "prepare.ps1", "prepare.sh", "evaluation.example.json", "README.md")) {
     $source = Join-Path $extras $fileName
     if (-not (Test-Path -LiteralPath $source)) { throw "$source is missing from the template." }
     $output = Join-Path $projectRoot (Join-Path ".rag" $fileName)

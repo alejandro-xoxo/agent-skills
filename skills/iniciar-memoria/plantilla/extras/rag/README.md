@@ -29,5 +29,5 @@ Windows with PowerShell and the `py` launcher, and Python 3.10 to 3.13. Tested w
 ## Measuring whether it works
 Copy `evaluation.example.json` as `evaluation.json`, change the questions to 15 or 20 of your own (with the file where the answer is) and run `rag.py evaluate`. It shows the hit rate of keywords, meaning and the mix, and the recommended threshold. In the first project where it was tried, with 20 questions written by someone who knew the notes, the mix hit in the top 3 95% of the time and the keywords alone 70%; with your own questions the result may differ.
 
-## Untested
-macOS and Linux, and Pythons other than 3.12 (`prepare.ps1` looks for 3.12, 3.13, 3.11 and 3.10, in that order). Whether the hooks fire in a real session depends on Claude Code loading them (step 3).
+## Untested and tested
+macOS (never run). Linux was tested once with `prepare.sh` (Python 3.14, fastembed 0.9.1); `prepare.ps1` looks for 3.12, 3.13, 3.11 and 3.10, in that order. Whether the hooks fire in a real session depends on Claude Code loading them (step 3).
